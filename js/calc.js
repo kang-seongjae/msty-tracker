@@ -35,6 +35,7 @@ export function computePortfolio(settings, records) {
   let dividendsUSD = 0;
   let dividendsKRW = 0;
   let spentUSD = 0;
+  let spentKRW = 0;
   const history = [];
 
   for (const rec of sortRecords(records)) {
@@ -47,6 +48,7 @@ export function computePortfolio(settings, records) {
     dividendsUSD += div;
     dividendsKRW += div * fx;
     spentUSD += spent;
+    spentKRW += spent * fx;
     cashUSD += div - spent;
     shares += bought;
     costUSD += spent;
@@ -71,6 +73,7 @@ export function computePortfolio(settings, records) {
     dividendsUSD,
     dividendsKRW,
     spentUSD,
+    spentKRW,
     history,
   };
 }
@@ -106,6 +109,15 @@ export function computeReport(settings, records, market) {
   // 평균 단가 대비 현재 주가 (달러 기준)
   const priceVsAvg = p.avgCost > 0 ? price / p.avgCost - 1 : null;
 
+  // 증권사 기준 수익률: 분배금으로 산 주식의 매수 금액(그날 환율로 원화 환산)도 원금으로 봅니다.
+  //   매수원금 = 내가 넣은 원금 + Σ(재매수 주수 × 매수 가격 × 그날 환율)
+  //   수익률   = (보유 주식 평가금액 − 매수원금) ÷ 매수원금
+  // 증권사 앱처럼 주식만 평가하므로 재매수 후 남은 현금은 넣지 않습니다.
+  const brokerCostKRW = principalKRW + p.spentKRW;
+  const stockValueKRW = stockValueUSD * fx;
+  const brokerProfitKRW = stockValueKRW - brokerCostKRW;
+  const brokerReturn = principalKRW > 0 ? brokerProfitKRW / brokerCostKRW : null;
+
   return {
     ...p,
     price,
@@ -124,6 +136,10 @@ export function computeReport(settings, records, market) {
     reinvestedValueKRW,
     priceOnlyReturn,
     priceVsAvg,
+    stockValueKRW,
+    brokerCostKRW,
+    brokerProfitKRW,
+    brokerReturn,
     verdict: verdictText(addedShares, profitKRW, principalKRW),
   };
 }

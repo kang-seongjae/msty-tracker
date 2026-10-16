@@ -263,12 +263,17 @@ function renderReport() {
     $('r-orig-value').textContent = krw(r.originalValueKRW);
     $('r-reinv-value').textContent = krw(r.reinvestedValueKRW);
     $('r-price-only').textContent = pct(r.priceOnlyReturn);
+    $('r-broker-return').textContent = r.brokerReturn == null ? '원금 필요' : pct(r.brokerReturn);
+    $('r-broker-profit').textContent = r.principalKRW > 0 ? `손익 ${signed(r.brokerProfitKRW, krw)}` : '';
+    $('r-stock-value').textContent = krw(r.stockValueKRW);
+    $('r-return-again').textContent = $('r-return').textContent;
     $('verdict').textContent = r.verdict;
     const total = Math.max(r.originalValueKRW, 0) + Math.max(r.reinvestedValueKRW, 0);
     const a = total > 0 ? (Math.max(r.originalValueKRW, 0) / total) * 100 : 0;
     $('split-bar').innerHTML = total > 0 ? `<span class="s-orig" style="width:${a}%"></span><span class="s-reinv" style="width:${100 - a}%"></span>` : '';
   } else {
-    for (const id of ['r-return', 'r-value', 'r-orig-value', 'r-reinv-value', 'r-price-only']) $(id).textContent = '–';
+    for (const id of ['r-return', 'r-value', 'r-orig-value', 'r-reinv-value', 'r-price-only', 'r-broker-return', 'r-stock-value', 'r-return-again']) $(id).textContent = '–';
+    $('r-broker-profit').textContent = '';
     $('r-profit').textContent = '현재 주가와 환율을 입력하세요';
     $('verdict').textContent = '';
     $('split-bar').innerHTML = '';
@@ -276,6 +281,10 @@ function renderReport() {
   tone($('r-return'), hasMarket ? r.profitKRW : 0);
   tone($('r-profit'), hasMarket ? r.profitKRW : 0);
   tone($('r-price-only'), hasMarket ? r.priceOnlyReturn : 0);
+  tone($('r-broker-return'), hasMarket ? r.brokerProfitKRW : 0);
+  tone($('r-broker-profit'), hasMarket ? r.brokerProfitKRW : 0);
+  tone($('r-return-again'), hasMarket ? r.profitKRW : 0);
+  $('r-broker-cost').textContent = krw(r.brokerCostKRW);
   $('verdict').className = `verdict ${r.sharesUp ? 's-up' : 's-flat'} ${r.moneyUp ? 'm-up' : 'm-down'}`;
 }
 

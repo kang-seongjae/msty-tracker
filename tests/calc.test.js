@@ -61,9 +61,34 @@ test('성적표: 처음 주식 가치 + 재투자분 가치 = 평가금액', () 
   assertClose(r.originalValueKRW + r.reinvestedValueKRW, r.valueKRW, 1e-6);
 });
 
+test('증권사 기준 수익률: 재매수 금액(그날 환율)을 원금에 더하고, 남은 현금은 빼고 계산', () => {
+  const r = computeReport(settings, records, { price: 13, fxRate: 1400 });
+  const reinvestKRW = 1 * 14 * 1400 + 2 * 13 * 1410; // 19,600 + 36,660 = 56,260
+  const cost = 2_000_000 + reinvestKRW;
+  const stockValue = 103 * 13 * 1400; // 1,874,600
+  assertClose(r.spentKRW, 56_260, 1e-6);
+  assertClose(r.brokerCostKRW, cost, 1e-6);
+  assertClose(r.stockValueKRW, stockValue, 1e-6);
+  assertClose(r.brokerReturn, (stockValue - cost) / cost, 1e-12);
+  assertEqual((r.brokerReturn * 100).toFixed(2), '-8.83');
+});
+
+test('증권사 기준 수익률은 분배금을 원금으로 보므로 이 앱의 총수익률보다 낮음', () => {
+  for (const price of [10, 13, 20, 30]) {
+    const r = computeReport(settings, records, { price, fxRate: 1400 });
+    assert(r.brokerReturn < r.totalReturn, `주가 $${price}: 증권사 ${r.brokerReturn} < 앱 ${r.totalReturn}`);
+  }
+});
+
+test('재매수 기록이 없으면 증권사 기준과 앱 총수익률이 같음', () => {
+  const r = computeReport(settings, [], { price: 13, fxRate: 1400 });
+  assertClose(r.brokerReturn, r.totalReturn, 1e-12);
+});
+
 test('성적표: 원금이 0이면 수익률은 계산하지 않음(null)', () => {
   const r = computeReport({ ...settings, principalKRW: 0 }, records, { price: 13, fxRate: 1400 });
   assertEqual(r.totalReturn, null);
+  assertEqual(r.brokerReturn, null);
 });
 
 test('시뮬레이션: 분배금 0, 주가·환율 그대로면 52주 내내 주수와 평가금액이 변하지 않음', () => {
