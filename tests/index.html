@@ -11,11 +11,12 @@
   </style>
 </head>
 <body>
-  <h1>MSTY 계산 로직 테스트</h1>
+  <h1>MSTY 계산·시세 로직 테스트</h1>
   <pre id="out"></pre>
   <script type="module">
     import { runAll } from './mini-test.js';
     import './calc.test.js';
+    import './quotes.test.js';
     const out = document.getElementById('out');
     await runAll((line) => (out.textContent += line + '\n'));
   </script>

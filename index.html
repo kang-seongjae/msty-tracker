@@ -24,11 +24,15 @@
     <!-- 성적표 -->
     <section id="tab-report" class="panel" role="tabpanel">
       <div class="card">
-        <h2>오늘 시세 입력</h2>
-        <div class="grid2">
-          <label>현재 주가 ($)<input type="number" inputmode="decimal" step="any" min="0" id="market-price"></label>
-          <label>현재 환율 (원/$)<input type="number" inputmode="decimal" step="any" min="0" id="market-fx"></label>
+        <div class="card-head">
+          <h2>오늘 시세</h2>
+          <button type="button" id="btn-refresh-quotes">새로고침</button>
         </div>
+        <div class="grid2">
+          <label>현재 주가 ($)<input type="number" inputmode="decimal" step="any" min="0" id="market-price"><small class="src" id="src-price"></small></label>
+          <label>현재 환율 (원/$)<input type="number" inputmode="decimal" step="any" min="0" id="market-fx"><small class="src" id="src-fx"></small></label>
+        </div>
+        <p class="help" id="quote-status" role="status"></p>
       </div>
 
       <div id="setup-hint" class="card notice" hidden>
@@ -97,6 +101,7 @@
           <label>재매수 주수<input type="number" inputmode="decimal" step="any" min="0" id="f-shares" required></label>
           <label>환율 (원/$)<input type="number" inputmode="decimal" step="any" min="0" id="f-fx" required></label>
         </div>
+        <p class="help" id="f-prefill"></p>
         <p class="help" id="f-hint"></p>
         <p class="error" id="f-error" role="alert"></p>
         <div class="row">
@@ -167,6 +172,26 @@
           <label>내가 넣은 원금 (원)<input type="number" inputmode="numeric" step="any" min="0" id="s-principal"></label>
         </div>
         <p class="help">입력하면 바로 저장돼요.</p>
+      </form>
+
+      <form class="card" id="api-form">
+        <h2>시세 자동 가져오기</h2>
+        <p class="help">환율은 키 없이 자동으로 가져와요. 주가는 무료 API 키가 있어야 해요. 키는 <strong>이 브라우저에만</strong> 저장되고 코드나 백업 파일에는 들어가지 않아요.</p>
+        <div class="grid2">
+          <label>주가 제공처
+            <select id="api-provider">
+              <option value="finnhub">Finnhub (분당 60회, 실시간)</option>
+              <option value="twelvedata">Twelve Data (하루 800회)</option>
+            </select>
+          </label>
+          <label>API 키<input type="password" id="api-key" autocomplete="off" spellcheck="false" placeholder="여기에 붙여 넣기"></label>
+        </div>
+        <p class="help"><a id="api-key-link" href="https://finnhub.io/register" target="_blank" rel="noopener">무료 키 발급받기 ↗</a></p>
+        <div class="row">
+          <button type="submit" class="primary">저장하고 시세 가져오기</button>
+          <button type="button" id="api-key-clear">키 지우기</button>
+        </div>
+        <p class="help" id="api-msg" role="status"></p>
       </form>
 
       <div class="card">

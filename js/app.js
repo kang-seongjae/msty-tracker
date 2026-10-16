@@ -3,6 +3,7 @@
 import { computePortfolio, computeReport, simulate, findTargetWeek, addWeeks } from './calc.js';
 import { loadState, saveState, exportState, importStateFile, defaultState, STORAGE_KEY, SCENARIO_KEYS } from './storage.js';
 import { renderLineChart } from './chart.js';
+import { refreshQuotes, loadApiConfig, saveApiConfig, loadQuoteCache, saveQuoteCache, PRICE_PROVIDERS } from './quotes.js';
 
 const SCENARIO_META = {
   optimistic: { label: '낙관', color: 'var(--series-optimistic)' },
@@ -13,6 +14,10 @@ const SCENARIO_META = {
 let state = loadState();
 let editingId = null;
 let chartMetric = 'valueKRW';
+let apiConfig = loadApiConfig();
+let quoteCache = loadQuoteCache();
+let quotesLoading = false;
+let prefilled = { price: null, fx: null }; // 기록 폼에 미리 채운 값 (사용자가 고쳤는지 알아보려고 기억)
 
 const $ = (id) => document.getElementById(id);
 
@@ -66,8 +71,8 @@ function bindNumber(id, get, set) {
   });
 }
 
-bindNumber('market-price', () => state.market.price, (v) => (state.market.price = v));
-bindNumber('market-fx', () => state.market.fxRate, (v) => (state.market.fxRate = v));
+bindNumber('market-price', () => state.market.price, (v) => { state.market.price = v; renderQuoteLabels(); });
+bindNumber('market-fx', () => state.market.fxRate, (v) => { state.market.fxRate = v; renderQuoteLabels(); });
 bindNumber('s-shares', () => state.settings.initialShares, (v) => (state.settings.initialShares = v));
 bindNumber('s-avg', () => state.settings.initialAvgCost, (v) => (state.settings.initialAvgCost = v));
 bindNumber('s-principal', () => state.settings.principalKRW, (v) => (state.settings.principalKRW = v));
@@ -109,14 +114,44 @@ function resetForm() {
   editingId = null;
   form.reset();
   fields.date.value = today();
-  const last = state.records.at(-1);
-  if (last) fields.fx.value = last.fxRate;
-  else if (state.market.fxRate) fields.fx.value = state.market.fxRate;
+  prefilled = { price: null, fx: null };
+  prefillFromQuotes();
+  if (!fields.fx.value) {
+    const last = state.records.at(-1);
+    if (last) fields.fx.value = last.fxRate;
+    else if (state.market.fxRate) fields.fx.value = state.market.fxRate;
+  }
   $('record-form-title').textContent = '분배 기록 추가';
   $('f-submit').textContent = '기록 추가';
   $('f-cancel').hidden = true;
   $('f-error').textContent = '';
   updateHint();
+}
+
+/**
+ * 새 기록 폼의 매수 가격·환율 칸을 가져온 시세로 미리 채웁니다.
+ * 비어 있거나 전에 미리 채운 값 그대로인 칸만 바꾸고, 사용자가 고친 칸은 건드리지 않습니다.
+ */
+function prefillFromQuotes() {
+  if (editingId) return;
+  const fill = (input, key, value) => {
+    if (!(value > 0)) return;
+    const untouched = input.value === '' || Number(input.value) === prefilled[key];
+    if (!untouched) return;
+    input.value = value;
+    prefilled[key] = value;
+  };
+  fill(fields.price, 'price', quoteCache.price?.value);
+  fill(fields.fx, 'fx', quoteCache.fx?.value);
+  updatePrefillNote();
+}
+
+function updatePrefillNote() {
+  const used = (prefilled.price != null && Number(fields.price.value) === prefilled.price)
+    || (prefilled.fx != null && Number(fields.fx.value) === prefilled.fx);
+  $('f-prefill').textContent = !editingId && used
+    ? '매수 가격·환율은 가져온 시세로 미리 채웠어요. 실제 체결가와 적용 환율로 고쳐 주세요.'
+    : '';
 }
 
 function updateHint() {
@@ -134,7 +169,7 @@ function updateHint() {
   if (bought > 0) text += ` 이번 매수 금액 ${usd(bought * price)}, 남는 돈 ${usd(available - bought * price)}.`;
   hint.textContent = text;
 }
-Object.values(fields).forEach((f) => f.addEventListener('input', updateHint));
+Object.values(fields).forEach((f) => f.addEventListener('input', () => { updateHint(); updatePrefillNote(); }));
 
 form.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -186,6 +221,7 @@ $('records-body').addEventListener('click', (e) => {
     $('record-form-title').textContent = `${rec.date} 기록 수정`;
     $('f-submit').textContent = '수정 저장';
     $('f-cancel').hidden = false;
+    updatePrefillNote();
     updateHint();
     form.scrollIntoView({ behavior: 'smooth' });
   }
@@ -368,10 +404,134 @@ window.addEventListener('resize', () => {
   resizeTimer = setTimeout(() => { if (!$('tab-sim').hidden) renderSim(); }, 150);
 });
 
+// ---------- 시세 자동 가져오기 ----------
+const timeFmt = new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+const dateFmt = new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', timeZone: 'UTC' });
+const escapeHTML = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+function sourceLabel(entry) {
+  const parts = [`<a href="${escapeHTML(entry.sourceUrl)}" target="_blank" rel="noopener">${escapeHTML(entry.source)}</a>`];
+  if (entry.asOf) parts.push(entry.dateOnly ? `${dateFmt.format(entry.asOf)} 고시` : `${timeFmt.format(entry.asOf)} 시세`);
+  parts.push(`${timeFmt.format(entry.fetchedAt)} 가져옴`);
+  return parts.join(' · ');
+}
+
+/** 주가·환율 칸 아래에 출처와 시각을 표시. 직접 고친 값이면 "직접 입력"으로 표시합니다. */
+function renderQuoteLabels() {
+  const one = (key, current, format) => {
+    const node = $(`src-${key}`);
+    const entry = quoteCache[key];
+    node.classList.remove('warn');
+    const useBtn = entry ? `<button type="button" class="link" data-use-quote="${key}">가져온 값 ${format(entry.value)} 쓰기</button>` : '';
+    if (entry && current === entry.value) node.innerHTML = sourceLabel(entry);
+    else if (current > 0) node.innerHTML = entry ? `직접 입력 · ${useBtn}` : '직접 입력';
+    else node.innerHTML = useBtn;
+  };
+  one('price', state.market.price, (v) => usd(v));
+  one('fx', state.market.fxRate, (v) => `${v.toLocaleString('ko-KR')}원`);
+}
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-use-quote]');
+  if (!btn) return;
+  e.preventDefault(); // label 안의 버튼이라 입력칸으로 포커스가 넘어가지 않게
+  const key = btn.dataset.useQuote;
+  const entry = quoteCache[key];
+  if (!entry) return;
+  if (key === 'price') state.market.price = entry.value;
+  else state.market.fxRate = entry.value;
+  $(key === 'price' ? 'market-price' : 'market-fx').value = entry.value;
+  update();
+  renderQuoteLabels();
+});
+
+async function loadQuotes(force = false) {
+  if (quotesLoading) return;
+  quotesLoading = true;
+  const btn = $('btn-refresh-quotes');
+  btn.disabled = true;
+  btn.textContent = '가져오는 중…';
+  try {
+    const r = await refreshQuotes({ cache: quoteCache, provider: apiConfig.provider, apiKey: apiConfig.apiKey, force });
+    quoteCache = r.cache;
+    saveQuoteCache(quoteCache);
+
+    // 방금 가져왔거나 10분 안의 값이면 화면에 반영.
+    // 실패했을 땐 지금 칸의 값(마지막으로 가져온 값이나 직접 입력한 값)을 그대로 둡니다.
+    let changed = false;
+    if ((r.price.status === 'fetched' || r.price.status === 'cached') && r.price.entry) {
+      state.market.price = r.price.entry.value;
+      $('market-price').value = r.price.entry.value;
+      changed = true;
+    }
+    if ((r.fx.status === 'fetched' || r.fx.status === 'cached') && r.fx.entry) {
+      state.market.fxRate = r.fx.entry.value;
+      $('market-fx').value = r.fx.entry.value;
+      changed = true;
+    }
+    if (changed) update();
+    renderQuoteLabels();
+    renderQuoteStatus(r);
+    prefillFromQuotes();
+    updateHint();
+    return r;
+  } finally {
+    quotesLoading = false;
+    btn.disabled = false;
+    btn.textContent = '새로고침';
+  }
+}
+
+function renderQuoteStatus(r) {
+  const describe = (name, x) => {
+    if (x.status === 'nokey') return `${name}: 설정에서 API 키를 넣으면 자동으로 가져와요. 지금은 직접 입력해 주세요.`;
+    if (x.status === 'stale') return `${name}: 가져오지 못했어요 (${x.error}) 지금 칸의 값을 쓰거나 직접 고쳐 주세요.`;
+    if (x.status === 'failed') return `${name}: 가져오지 못했어요 (${x.error}) 직접 입력해 주세요.`;
+    return null;
+  };
+  const msgs = [describe('주가', r.price), describe('환율', r.fx)].filter(Boolean);
+  if (r.price.status === 'cached' || r.fx.status === 'cached') msgs.push('호출 횟수를 아끼려고 10분 안에 가져온 값은 다시 써요. 바로 받으려면 새로고침을 누르세요.');
+  $('quote-status').textContent = msgs.join(' ');
+  if (r.price.status === 'stale' || r.price.status === 'failed') $('src-price').classList.add('warn');
+  if (r.fx.status === 'stale' || r.fx.status === 'failed') $('src-fx').classList.add('warn');
+}
+
+$('btn-refresh-quotes').addEventListener('click', () => loadQuotes(true));
+
+// 설정: API 키 (이 브라우저에만 저장, 백업 파일에는 넣지 않음)
+function renderApiForm() {
+  $('api-provider').value = apiConfig.provider;
+  $('api-key').value = apiConfig.apiKey;
+  $('api-key-link').href = PRICE_PROVIDERS[apiConfig.provider].keyPage;
+}
+$('api-provider').addEventListener('change', (e) => {
+  $('api-key-link').href = PRICE_PROVIDERS[e.target.value].keyPage;
+});
+$('api-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  apiConfig = { provider: $('api-provider').value, apiKey: $('api-key').value.trim() };
+  if (!saveApiConfig(apiConfig)) { $('api-msg').textContent = '이 브라우저에 저장할 수 없어요.'; return; }
+  $('api-msg').textContent = '저장했어요. 시세를 가져오는 중…';
+  const r = await loadQuotes(true);
+  if (!r) return;
+  $('api-msg').textContent = !apiConfig.apiKey ? '키 없이 저장했어요. 환율만 자동으로 가져와요.'
+    : r.price.status === 'fetched' ? `저장했어요. 주가 ${usd(r.price.entry.value)}를 가져왔어요.`
+    : `저장했지만 주가를 가져오지 못했어요: ${r.price.error}`;
+});
+$('api-key-clear').addEventListener('click', () => {
+  apiConfig = { ...apiConfig, apiKey: '' };
+  saveApiConfig(apiConfig);
+  renderApiForm();
+  $('api-msg').textContent = '키를 지웠어요.';
+});
+
 // ---------- 시작 ----------
 buildScenarioInputs();
+renderApiForm();
 resetForm();
 render();
+renderQuoteLabels();
+loadQuotes(false);
 let startTab = 'report';
 try { startTab = sessionStorage.getItem('msty-tab') || 'report'; } catch {}
 showTab(startTab);
