@@ -417,6 +417,8 @@ function sourceLabel(entry) {
   return parts.join(' · ');
 }
 
+const isOffline = () => navigator.onLine === false;
+
 /** 마지막 가져오기에서 MSTY 주가·환율의 상태 ('fetched' | 'cached' | 'stale' | 'failed' | 'nokey') */
 let quoteStatus = {};
 
@@ -445,7 +447,7 @@ function renderQuoteLabels() {
     if (showingFetched) node.innerHTML = sourceLabel(entry);
     else if (current > 0) node.innerHTML = entry ? `직접 입력 · ${useBtn}` : '직접 입력';
     else node.innerHTML = useBtn;
-    const stale = showingFetched && (status === 'stale' || status === 'nokey');
+    const stale = showingFetched && (status === 'stale' || status === 'nokey' || (isOffline() && status === 'cached'));
     setStaleBadge(`stale-${key}`, entry, stale);
     anyStale ||= stale;
   };
@@ -516,7 +518,8 @@ function renderQuoteStatus(r) {
     return null;
   };
   const msgs = [describe('주가', r.price), describe('환율', r.fx)].filter(Boolean);
-  if (r.price.status === 'cached' || r.fx.status === 'cached') msgs.push('호출 횟수를 아끼려고 10분 안에 가져온 값은 다시 써요. 바로 받으려면 새로고침을 누르세요.');
+  if (isOffline()) msgs.unshift('인터넷에 연결되어 있지 않아요. 마지막으로 가져온 값을 보여 줘요.');
+  if (!isOffline() && (r.price.status === 'cached' || r.fx.status === 'cached')) msgs.push('호출 횟수를 아끼려고 10분 안에 가져온 값은 다시 써요. 바로 받으려면 새로고침을 누르세요.');
   $('quote-status').textContent = msgs.join(' ');
 }
 
@@ -533,8 +536,9 @@ function renderReference() {
     const chgEl = $(`ref-${key}-chg`);
     const srcEl = $(`src-${key}`);
     srcEl.classList.remove('warn');
-    const reason = st?.status === 'nokey' ? 'API 키 없음' : st?.error ?? '';
-    setStaleBadge(`stale-${key}`, entry, !!entry && (st?.status === 'stale' || st?.status === 'nokey'), reason);
+    const reason = st?.status === 'nokey' ? 'API 키 없음' : isOffline() ? '오프라인' : st?.error ?? '';
+    const stale = st?.status === 'stale' || st?.status === 'nokey' || (isOffline() && st?.status === 'cached');
+    setStaleBadge(`stale-${key}`, entry, !!entry && stale, reason);
     if (!entry) {
       valueEl.textContent = '–';
       chgEl.textContent = '';
@@ -591,6 +595,25 @@ render();
 renderQuoteLabels();
 renderReference();
 loadQuotes(false);
+
+// 인터넷이 다시 연결되면 시세를 새로 가져옵니다.
+window.addEventListener('online', () => loadQuotes(true));
+
+// ---------- 앱 설치(PWA)와 새 버전 반영 ----------
+if ('serviceWorker' in navigator) {
+  // 이미 예전 버전 서비스 워커가 화면을 맡고 있었다면, 새 버전이 넘겨받는 순간 한 번 새로고침해
+  // 설치한 앱도 바로 새 화면이 되게 합니다. (처음 설치할 때는 새로고침하지 않음)
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;
+    reloading = true;
+    location.reload();
+  });
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').then((reg) => reg.update()).catch(() => {});
+  });
+}
 let startTab = 'report';
 try { startTab = sessionStorage.getItem('msty-tab') || 'report'; } catch {}
 showTab(startTab);

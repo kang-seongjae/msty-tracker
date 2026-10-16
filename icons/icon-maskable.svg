@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#101014"/>
+  <!-- 마스크(원·둥근 사각형)로 잘려도 보이도록 가운데 80% 안에만 그림 -->
+  <g transform="translate(256 268) scale(0.78) translate(-256 -268)">
+    <rect x="124" y="292" width="68" height="112" rx="18" fill="#4a4a56"/>
+    <rect x="222" y="220" width="68" height="184" rx="18" fill="#3182f6"/>
+    <rect x="320" y="132" width="68" height="272" rx="18" fill="#f04452"/>
+  </g>
+</svg>
