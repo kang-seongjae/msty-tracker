@@ -472,6 +472,8 @@ async function loadQuotes(force = false) {
     if (changed) update();
     renderQuoteLabels();
     renderQuoteStatus(r);
+    refStatus = { mstr: r.mstr, btc: r.btc };
+    renderReference();
     prefillFromQuotes();
     updateHint();
     return r;
@@ -494,6 +496,44 @@ function renderQuoteStatus(r) {
   $('quote-status').textContent = msgs.join(' ');
   if (r.price.status === 'stale' || r.price.status === 'failed') $('src-price').classList.add('warn');
   if (r.fx.status === 'stale' || r.fx.status === 'failed') $('src-fx').classList.add('warn');
+}
+
+/**
+ * 참고 시세 카드(비트코인, MSTR). 화면 표시만 하고 state 나 수익률 계산에는 넣지 않습니다.
+ * refStatus 는 마지막 가져오기 결과로, 실패 이유를 보여 줄 때 씁니다.
+ */
+let refStatus = {};
+function renderReference() {
+  const one = (key, changeLabel) => {
+    const entry = quoteCache[key];
+    const st = refStatus[key];
+    const valueEl = $(`ref-${key}`);
+    const chgEl = $(`ref-${key}-chg`);
+    const srcEl = $(`src-${key}`);
+    srcEl.classList.remove('warn');
+    if (!entry) {
+      valueEl.textContent = '–';
+      chgEl.textContent = '';
+      srcEl.textContent = st?.status === 'nokey' ? '설정에서 API 키를 넣으면 보여요.'
+        : st?.status === 'failed' ? `가져오지 못했어요 (${st.error})`
+        : '';
+      if (st?.status === 'failed') srcEl.classList.add('warn');
+      return;
+    }
+    valueEl.textContent = usd(entry.value);
+    chgEl.textContent = entry.changePct == null ? '' : `${changeLabel} ${entry.changePct > 0 ? '+' : ''}${entry.changePct.toFixed(2)}%`;
+    tone(chgEl, entry.changePct ?? 0);
+    let src = sourceLabel(entry);
+    if (st?.status === 'stale') {
+      src += ` · 마지막으로 가져온 값 (새로 못 가져옴: ${escapeHTML(st.error)})`;
+      srcEl.classList.add('warn');
+    } else if (st?.status === 'nokey') {
+      src += ' · 예전 값 (API 키 없음)';
+    }
+    srcEl.innerHTML = src;
+  };
+  one('btc', '24시간');
+  one('mstr', '전일 대비');
 }
 
 $('btn-refresh-quotes').addEventListener('click', () => loadQuotes(true));
@@ -531,6 +571,7 @@ renderApiForm();
 resetForm();
 render();
 renderQuoteLabels();
+renderReference();
 loadQuotes(false);
 let startTab = 'report';
 try { startTab = sessionStorage.getItem('msty-tab') || 'report'; } catch {}

@@ -34,10 +34,14 @@ Node가 없으면 로컬 서버를 켠 뒤 `http://localhost:8000/tests/` 를 �
 | 주가 (대안) | [Twelve Data](https://twelvedata.com) | 필요 (무료) | 분당 8회, 하루 800회 | 미국 주식 실시간 |
 | 환율 (기본) | [Frankfurter](https://frankfurter.dev) | 불필요 | 할당량 없음(남용 방지 제한만) | 중앙은행 고시 환율, **하루 1번** |
 | 환율 (예비) | [ExchangeRate-API](https://www.exchangerate-api.com) | 불필요 | 초과 시 20분 차단 | **하루 1번** |
+| 참고: MSTR | 주가와 같은 제공처 (Finnhub / Twelve Data) | 필요 | 위와 같음 | 실시간, 전일 대비 등락률 |
+| 참고: 비트코인 | [CoinGecko](https://www.coingecko.com) | 불필요 | IP별 제한(숫자 비공개) | 수십 초~1분 간격, 24시간 등락률 |
+| 참고: 비트코인 (예비) | [Coinbase Exchange](https://www.coinbase.com) | 불필요 | IP별 초당 10회 | 실시간, 24시간 시가 대비 |
 
 - API 키는 설정 화면에서 입력하며, 이 브라우저의 localStorage(`msty-tracker-api`)에만 저장됩니다. 코드·저장소·백업 JSON 파일에는 들어가지 않습니다.
 - 가져온 값은 10분 동안 재사용합니다. "새로고침" 버튼은 바로 다시 가져옵니다.
 - 가져오기에 실패하면 칸에 있던 값(마지막으로 가져온 값이나 직접 입력한 값)을 그대로 씁니다.
+- MSTR·비트코인은 성적표의 "참고 시세" 카드에만 보이고 수익률 계산에는 쓰지 않습니다. Finnhub 무료 `/quote`는 미국 주식 전용이라 비트코인은 키 없는 공개 API로 가져옵니다.
 
 ## 파일 구조
 

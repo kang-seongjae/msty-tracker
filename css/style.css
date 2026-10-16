@@ -228,3 +228,14 @@ td.actions button { min-height: 36px; padding: 4px 10px; font-size: 0.8rem; }
   table.records td.actions { grid-column: 1 / -1; justify-content: flex-end; margin-top: 4px; }
   table.records td.actions::before { content: none; }
 }
+
+/* 참고 시세 */
+.ref-list { display: grid; gap: 12px; }
+.ref-row { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 2px 12px; padding-bottom: 12px; border-bottom: 1px solid var(--grid); }
+.ref-row:last-child { padding-bottom: 0; border-bottom: 0; }
+.ref-name { font-weight: 600; }
+.ref-name small { color: var(--text-3); font-weight: 400; margin-left: 4px; }
+.ref-value { text-align: right; font-variant-numeric: tabular-nums; }
+.ref-value strong { font-size: 1.1rem; }
+.ref-chg { font-size: 0.85rem; }
+.ref-row .src { grid-column: 1 / -1; }
