@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>계산 테스트</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin: 0; padding: 16px; font-family: system-ui, "Malgun Gothic", sans-serif; background: Canvas; color: CanvasText; }
+    pre { white-space: pre-wrap; font-size: 14px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <h1>MSTY 계산 로직 테스트</h1>
+  <pre id="out"></pre>
+  <script type="module">
+    import { runAll } from './mini-test.js';
+    import './calc.test.js';
+    const out = document.getElementById('out');
+    await runAll((line) => (out.textContent += line + '\n'));
+  </script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "name": "msty-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MSTY 분배금 재투자 기록·시뮬레이션 웹 앱",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/run.js"
+  }
+}

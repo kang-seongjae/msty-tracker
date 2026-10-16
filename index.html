@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f6f4">
+  <title>MSTY 재투자 기록장</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="app-header">
+    <h1>MSTY 재투자 기록장</h1>
+    <p class="save-status" id="save-status" aria-live="polite"></p>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="report" aria-selected="true">성적표</button>
+    <button role="tab" data-tab="records" aria-selected="false">분배 기록</button>
+    <button role="tab" data-tab="sim" aria-selected="false">시뮬레이션</button>
+    <button role="tab" data-tab="settings" aria-selected="false">설정</button>
+  </nav>
+
+  <main>
+    <!-- 성적표 -->
+    <section id="tab-report" class="panel" role="tabpanel">
+      <div class="card">
+        <h2>오늘 시세 입력</h2>
+        <div class="grid2">
+          <label>현재 주가 ($)<input type="number" inputmode="decimal" step="any" min="0" id="market-price"></label>
+          <label>현재 환율 (원/$)<input type="number" inputmode="decimal" step="any" min="0" id="market-fx"></label>
+        </div>
+      </div>
+
+      <div id="setup-hint" class="card notice" hidden>
+        먼저 <button type="button" class="link" data-goto="settings">설정</button>에서 처음 보유 주수, 평균 단가, 원금을 입력해 주세요.
+      </div>
+
+      <p class="verdict" id="verdict"></p>
+
+      <div class="duo">
+        <div class="card stat-card">
+          <h2>주수가 늘었나?</h2>
+          <p class="big" id="r-shares"></p>
+          <p class="sub" id="r-shares-sub"></p>
+          <dl class="kv">
+            <dt>처음 보유</dt><dd id="r-initial-shares"></dd>
+            <dt>재투자로 늘어난 주수</dt><dd id="r-added-shares"></dd>
+            <dt>평균 단가</dt><dd id="r-avg"></dd>
+            <dt>평균 단가 대비 현재가</dt><dd id="r-price-vs-avg"></dd>
+          </dl>
+        </div>
+        <div class="card stat-card">
+          <h2>돈이 늘었나?</h2>
+          <p class="big" id="r-return"></p>
+          <p class="sub" id="r-profit"></p>
+          <dl class="kv">
+            <dt>내가 넣은 원금</dt><dd id="r-principal"></dd>
+            <dt>현재 평가금액</dt><dd id="r-value"></dd>
+            <dt>받은 분배금 합계</dt><dd id="r-dividends"></dd>
+            <dt>재매수 후 남은 현금</dt><dd id="r-cash"></dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>평가금액 쪼개 보기</h2>
+        <div class="split-bar" id="split-bar" aria-hidden="true"></div>
+        <dl class="kv">
+          <dt><span class="swatch s-orig"></span>처음 주식의 지금 가치</dt><dd id="r-orig-value"></dd>
+          <dt><span class="swatch s-reinv"></span>분배금으로 늘어난 가치</dt><dd id="r-reinv-value"></dd>
+          <dt>분배금이 없었다면 수익률</dt><dd id="r-price-only"></dd>
+        </dl>
+        <p class="help">분배금은 모두 주식으로 다시 샀기 때문에 평가금액 안에 이미 들어 있어요. 총수익률은 분배금을 따로 한 번 더 더하지 않고, (평가금액 − 원금) ÷ 원금으로 계산해요.</p>
+      </div>
+    </section>
+
+    <!-- 분배 기록 -->
+    <section id="tab-records" class="panel" role="tabpanel" hidden>
+      <form class="card" id="record-form" novalidate>
+        <h2 id="record-form-title">분배 기록 추가</h2>
+        <div class="grid2">
+          <label>날짜<input type="date" id="f-date" required></label>
+          <label>세후 분배금 ($)<input type="number" inputmode="decimal" step="any" min="0" id="f-div" required></label>
+          <label>매수 가격 ($)<input type="number" inputmode="decimal" step="any" min="0" id="f-price" required></label>
+          <label>재매수 주수<input type="number" inputmode="decimal" step="any" min="0" id="f-shares" required></label>
+          <label>환율 (원/$)<input type="number" inputmode="decimal" step="any" min="0" id="f-fx" required></label>
+        </div>
+        <p class="help" id="f-hint"></p>
+        <p class="error" id="f-error" role="alert"></p>
+        <div class="row">
+          <button type="submit" class="primary" id="f-submit">기록 추가</button>
+          <button type="button" id="f-cancel" hidden>수정 취소</button>
+        </div>
+      </form>
+
+      <div class="card">
+        <h2>기록 목록</h2>
+        <p class="help" id="records-empty">아직 기록이 없어요.</p>
+        <div class="table-wrap">
+          <table class="records" id="records-table" hidden>
+            <thead>
+              <tr>
+                <th>날짜</th><th>분배금</th><th>매수</th><th>보유 주수</th><th>평균 단가</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="records-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 시뮬레이션 -->
+    <section id="tab-sim" class="panel" role="tabpanel" hidden>
+      <div class="card">
+        <h2>시나리오 입력</h2>
+        <p class="help">시작점은 지금 보유 주수와 성적표의 현재 주가·환율이에요. 매주 받은 분배금으로 그 주 주가에 다시 산다고 가정해요.</p>
+        <div class="scenarios" id="scenario-inputs"></div>
+        <div class="grid2">
+          <label>목표 금액 (원)<input type="number" inputmode="numeric" step="any" min="0" id="sim-target"></label>
+          <label class="check"><input type="checkbox" id="sim-fractional">소수점 주식 매수 (끄면 1주 단위로 사고 자투리는 다음 주로)</label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="chart-head">
+          <h2 id="chart-title">52주 평가금액 (원)</h2>
+          <div class="seg" role="group" aria-label="그래프 항목">
+            <button type="button" data-metric="valueKRW" aria-pressed="true">평가금액</button>
+            <button type="button" data-metric="shares" aria-pressed="false">보유 주수</button>
+          </div>
+        </div>
+        <ul class="legend" id="legend"></ul>
+        <div class="chart" id="chart"></div>
+        <p class="help" id="sim-empty" hidden>현재 보유 주수와 현재 주가·환율이 있어야 시뮬레이션할 수 있어요.</p>
+      </div>
+
+      <div class="card">
+        <h2>시나리오별 결과</h2>
+        <div class="table-wrap">
+          <table class="results">
+            <thead><tr><th>시나리오</th><th>52주 뒤 주수</th><th>52주 뒤 평가금액</th><th>목표 도달</th></tr></thead>
+            <tbody id="sim-results"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 설정 -->
+    <section id="tab-settings" class="panel" role="tabpanel" hidden>
+      <form class="card" id="settings-form">
+        <h2>처음 상태</h2>
+        <div class="grid2">
+          <label>처음 보유 주수<input type="number" inputmode="decimal" step="any" min="0" id="s-shares"></label>
+          <label>처음 평균 단가 ($)<input type="number" inputmode="decimal" step="any" min="0" id="s-avg"></label>
+          <label>내가 넣은 원금 (원)<input type="number" inputmode="numeric" step="any" min="0" id="s-principal"></label>
+        </div>
+        <p class="help">입력하면 바로 저장돼요.</p>
+      </form>
+
+      <div class="card">
+        <h2>백업</h2>
+        <p class="help">데이터는 이 브라우저에만 저장돼요. 브라우저 데이터를 지우거나 폰을 바꾸면 사라지니, 가끔 백업 파일을 내려받아 두세요.</p>
+        <div class="row">
+          <button type="button" class="primary" id="btn-export">백업 파일 내려받기 (JSON)</button>
+          <label class="button">백업 파일 불러오기<input type="file" accept="application/json,.json" id="file-import" hidden></label>
+        </div>
+        <p class="help" id="backup-msg" role="status"></p>
+      </div>
+
+      <div class="card">
+        <h2>초기화</h2>
+        <p class="help">모든 기록과 설정을 지워요. 되돌릴 수 없으니 먼저 백업하세요.</p>
+        <button type="button" class="danger" id="btn-reset">모든 데이터 지우기</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
