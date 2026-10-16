@@ -296,6 +296,7 @@ function renderReport() {
     $('r-return').textContent = r.totalReturn == null ? '원금 필요' : pct(r.totalReturn);
     $('r-profit').textContent = r.principalKRW > 0 ? `손익 ${signed(r.profitKRW, krw)}` : '';
     $('r-value').textContent = `${krw(r.valueKRW)} (${usd(r.valueUSD)})`;
+    $('hero-value').textContent = krw(r.valueKRW);
     $('r-orig-value').textContent = krw(r.originalValueKRW);
     $('r-reinv-value').textContent = krw(r.reinvestedValueKRW);
     $('r-price-only').textContent = pct(r.priceOnlyReturn);
@@ -308,7 +309,7 @@ function renderReport() {
     const a = total > 0 ? (Math.max(r.originalValueKRW, 0) / total) * 100 : 0;
     $('split-bar').innerHTML = total > 0 ? `<span class="s-orig" style="width:${a}%"></span><span class="s-reinv" style="width:${100 - a}%"></span>` : '';
   } else {
-    for (const id of ['r-return', 'r-value', 'r-orig-value', 'r-reinv-value', 'r-price-only', 'r-broker-return', 'r-stock-value', 'r-return-again']) $(id).textContent = '–';
+    for (const id of ['r-return', 'r-value', 'hero-value', 'r-orig-value', 'r-reinv-value', 'r-price-only', 'r-broker-return', 'r-stock-value', 'r-return-again']) $(id).textContent = '–';
     $('r-broker-profit').textContent = '';
     $('r-profit').textContent = '현재 주가와 환율을 입력하세요';
     $('verdict').textContent = '';
@@ -416,19 +417,41 @@ function sourceLabel(entry) {
   return parts.join(' · ');
 }
 
-/** 주가·환율 칸 아래에 출처와 시각을 표시. 직접 고친 값이면 "직접 입력"으로 표시합니다. */
+/** 마지막 가져오기에서 MSTY 주가·환율의 상태 ('fetched' | 'cached' | 'stale' | 'failed' | 'nokey') */
+let quoteStatus = {};
+
+/** 시세를 새로 못 가져와 예전 값을 보여 줄 때 숫자 옆의 작은 경고 표시를 켜고 끕니다. */
+function setStaleBadge(id, entry, show, reason = '') {
+  const badge = $(id);
+  badge.hidden = !show;
+  badge.title = show && entry
+    ? `새로 못 가져와서 ${timeFmt.format(entry.fetchedAt)}에 가져온 값을 보여 주고 있어요${reason ? ` (${reason})` : ''}`
+    : '';
+}
+
+/**
+ * 주가·환율 칸 아래에 출처와 시각을 표시. 직접 고친 값이면 "직접 입력"으로 표시합니다.
+ * 칸의 값이 새로 못 가져온 예전 값이면 경고 표시를 붙입니다.
+ */
 function renderQuoteLabels() {
+  let anyStale = false;
   const one = (key, current, format) => {
     const node = $(`src-${key}`);
     const entry = quoteCache[key];
-    node.classList.remove('warn');
+    const status = quoteStatus[key]?.status;
+    node.classList.toggle('warn', status === 'failed');
     const useBtn = entry ? `<button type="button" class="link" data-use-quote="${key}">가져온 값 ${format(entry.value)} 쓰기</button>` : '';
-    if (entry && current === entry.value) node.innerHTML = sourceLabel(entry);
+    const showingFetched = !!entry && current === entry.value;
+    if (showingFetched) node.innerHTML = sourceLabel(entry);
     else if (current > 0) node.innerHTML = entry ? `직접 입력 · ${useBtn}` : '직접 입력';
     else node.innerHTML = useBtn;
+    const stale = showingFetched && (status === 'stale' || status === 'nokey');
+    setStaleBadge(`stale-${key}`, entry, stale);
+    anyStale ||= stale;
   };
   one('price', state.market.price, (v) => usd(v));
   one('fx', state.market.fxRate, (v) => `${v.toLocaleString('ko-KR')}원`);
+  $('hero-stale').hidden = !anyStale;
 }
 
 document.addEventListener('click', (e) => {
@@ -470,6 +493,7 @@ async function loadQuotes(force = false) {
       changed = true;
     }
     if (changed) update();
+    quoteStatus = { price: r.price, fx: r.fx };
     renderQuoteLabels();
     renderQuoteStatus(r);
     refStatus = { mstr: r.mstr, btc: r.btc };
@@ -494,8 +518,6 @@ function renderQuoteStatus(r) {
   const msgs = [describe('주가', r.price), describe('환율', r.fx)].filter(Boolean);
   if (r.price.status === 'cached' || r.fx.status === 'cached') msgs.push('호출 횟수를 아끼려고 10분 안에 가져온 값은 다시 써요. 바로 받으려면 새로고침을 누르세요.');
   $('quote-status').textContent = msgs.join(' ');
-  if (r.price.status === 'stale' || r.price.status === 'failed') $('src-price').classList.add('warn');
-  if (r.fx.status === 'stale' || r.fx.status === 'failed') $('src-fx').classList.add('warn');
 }
 
 /**
@@ -511,6 +533,8 @@ function renderReference() {
     const chgEl = $(`ref-${key}-chg`);
     const srcEl = $(`src-${key}`);
     srcEl.classList.remove('warn');
+    const reason = st?.status === 'nokey' ? 'API 키 없음' : st?.error ?? '';
+    setStaleBadge(`stale-${key}`, entry, !!entry && (st?.status === 'stale' || st?.status === 'nokey'), reason);
     if (!entry) {
       valueEl.textContent = '–';
       chgEl.textContent = '';
@@ -523,14 +547,8 @@ function renderReference() {
     valueEl.textContent = usd(entry.value);
     chgEl.textContent = entry.changePct == null ? '' : `${changeLabel} ${entry.changePct > 0 ? '+' : ''}${entry.changePct.toFixed(2)}%`;
     tone(chgEl, entry.changePct ?? 0);
-    let src = sourceLabel(entry);
-    if (st?.status === 'stale') {
-      src += ` · 마지막으로 가져온 값 (새로 못 가져옴: ${escapeHTML(st.error)})`;
-      srcEl.classList.add('warn');
-    } else if (st?.status === 'nokey') {
-      src += ' · 예전 값 (API 키 없음)';
-    }
-    srcEl.innerHTML = src;
+    // 예전 값이면 숫자 옆 경고 표시로 알리고, 이유는 그 표시의 툴팁에 둡니다.
+    srcEl.innerHTML = sourceLabel(entry);
   };
   one('btc', '24시간');
   one('mstr', '전일 대비');

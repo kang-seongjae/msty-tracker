@@ -3,34 +3,89 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f6f6f4">
+  <meta name="theme-color" content="#101014">
+  <meta name="color-scheme" content="dark">
   <title>MSTY 재투자 기록장</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <header class="app-header">
-    <h1>MSTY 재투자 기록장</h1>
+    <div class="app-header-inner">
+      <h1>MSTY 재투자 기록장</h1>
+      <!-- 폰 너비에서는 화면 아래에 고정되고, PC 너비에서는 제목 옆에 놓입니다. -->
+      <nav class="tabs" role="tablist" aria-label="화면 선택">
+        <button role="tab" data-tab="report" aria-selected="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11M10 20V5M16 20v-6M21 20H3"/></svg>
+          <span>성적표</span>
+        </button>
+        <button role="tab" data-tab="records" aria-selected="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>
+          <span>분배 기록</span>
+        </button>
+        <button role="tab" data-tab="sim" aria-selected="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
+          <span>시뮬레이션</span>
+        </button>
+        <button role="tab" data-tab="settings" aria-selected="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1.5 14h5M9.5 8h5M17.5 16h5"/></svg>
+          <span>설정</span>
+        </button>
+      </nav>
+    </div>
     <p class="save-status" id="save-status" aria-live="polite"></p>
   </header>
-
-  <nav class="tabs" role="tablist">
-    <button role="tab" data-tab="report" aria-selected="true">성적표</button>
-    <button role="tab" data-tab="records" aria-selected="false">분배 기록</button>
-    <button role="tab" data-tab="sim" aria-selected="false">시뮬레이션</button>
-    <button role="tab" data-tab="settings" aria-selected="false">설정</button>
-  </nav>
 
   <main>
     <!-- 성적표 -->
     <section id="tab-report" class="panel" role="tabpanel">
+      <!-- 가장 중요한 숫자: 총수익률, 증권사 기준 수익률, 보유 주수 -->
+      <section class="card hero span-2" aria-label="핵심 지표">
+        <div class="hero-main">
+          <p class="eyebrow">총수익률 <span class="eyebrow-note">분배금 포함</span>
+            <span class="stale-badge" id="hero-stale" hidden title="시세를 새로 못 가져와서 예전 주가·환율로 계산했어요">⚠ 예전 시세</span></p>
+          <p class="hero-big num" id="r-return">–</p>
+          <p class="hero-sub num" id="r-profit"></p>
+          <p class="hero-value">평가금액 <strong class="num" id="hero-value">–</strong></p>
+        </div>
+        <div class="hero-stat">
+          <p class="eyebrow">증권사 기준 수익률</p>
+          <p class="stat-big num" id="r-broker-return">–</p>
+          <p class="hero-sub num" id="r-broker-profit"></p>
+        </div>
+        <div class="hero-stat">
+          <p class="eyebrow">보유 주수</p>
+          <p class="stat-big num" id="r-shares">–</p>
+          <p class="hero-sub num" id="r-shares-sub"></p>
+        </div>
+        <p class="verdict" id="verdict"></p>
+      </section>
+
+      <div id="setup-hint" class="card notice span-2" hidden>
+        먼저 <button type="button" class="link" data-goto="settings">설정</button>에서 처음 보유 주수, 평균 단가, 원금을 입력해 주세요.
+      </div>
+
       <div class="card">
         <div class="card-head">
           <h2>오늘 시세</h2>
-          <button type="button" id="btn-refresh-quotes">새로고침</button>
+          <button type="button" class="chip" id="btn-refresh-quotes">새로고침</button>
         </div>
-        <div class="grid2">
-          <label>현재 주가 ($)<input type="number" inputmode="decimal" step="any" min="0" id="market-price"><small class="src" id="src-price"></small></label>
-          <label>현재 환율 (원/$)<input type="number" inputmode="decimal" step="any" min="0" id="market-fx"><small class="src" id="src-fx"></small></label>
+        <div class="quote-grid">
+          <label class="quote-field">
+            <span class="field-label">MSTY 주가 <small>$</small></span>
+            <span class="input-wrap">
+              <input type="number" inputmode="decimal" step="any" min="0" id="market-price">
+              <span class="stale-badge" id="stale-price" hidden>⚠ 예전 값</span>
+            </span>
+            <small class="src" id="src-price"></small>
+          </label>
+          <label class="quote-field">
+            <span class="field-label">원/달러 환율 <small>원</small></span>
+            <span class="input-wrap">
+              <input type="number" inputmode="decimal" step="any" min="0" id="market-fx">
+              <span class="stale-badge" id="stale-fx" hidden>⚠ 예전 값</span>
+            </span>
+            <small class="src" id="src-fx"></small>
+          </label>
         </div>
         <p class="help" id="quote-status" role="status"></p>
       </div>
@@ -39,54 +94,53 @@
         <h2>참고 시세</h2>
         <div class="ref-list">
           <div class="ref-row">
-            <span class="ref-name">비트코인 <small>BTC</small></span>
-            <span class="ref-value"><strong id="ref-btc">–</strong> <span class="ref-chg" id="ref-btc-chg"></span></span>
-            <small class="src" id="src-btc"></small>
+            <span class="ref-icon ref-icon-btc" aria-hidden="true">₿</span>
+            <div class="ref-left">
+              <span class="ref-name">비트코인</span>
+              <small class="src" id="src-btc"></small>
+            </div>
+            <div class="ref-right">
+              <span class="ref-price"><span class="stale-badge" id="stale-btc" hidden>⚠ 예전 값</span><strong class="num" id="ref-btc">–</strong></span>
+              <span class="ref-chg num" id="ref-btc-chg"></span>
+            </div>
           </div>
           <div class="ref-row">
-            <span class="ref-name">MSTR <small>스트래티지</small></span>
-            <span class="ref-value"><strong id="ref-mstr">–</strong> <span class="ref-chg" id="ref-mstr-chg"></span></span>
-            <small class="src" id="src-mstr"></small>
+            <span class="ref-icon ref-icon-mstr" aria-hidden="true">M</span>
+            <div class="ref-left">
+              <span class="ref-name">MSTR <small>스트래티지</small></span>
+              <small class="src" id="src-mstr"></small>
+            </div>
+            <div class="ref-right">
+              <span class="ref-price"><span class="stale-badge" id="stale-mstr" hidden>⚠ 예전 값</span><strong class="num" id="ref-mstr">–</strong></span>
+              <span class="ref-chg num" id="ref-mstr-chg"></span>
+            </div>
           </div>
         </div>
         <p class="help">MSTY는 MSTR 옵션을 팔아 분배금을 만들고, MSTR은 비트코인을 많이 갖고 있어 비트코인 가격의 영향을 크게 받아요. 참고용이라 수익률 계산에는 쓰지 않아요.</p>
       </div>
 
-      <div id="setup-hint" class="card notice" hidden>
-        먼저 <button type="button" class="link" data-goto="settings">설정</button>에서 처음 보유 주수, 평균 단가, 원금을 입력해 주세요.
-      </div>
-
-      <p class="verdict" id="verdict"></p>
-
-      <div class="duo">
-        <div class="card stat-card">
-          <h2>주수가 늘었나?</h2>
-          <p class="big" id="r-shares"></p>
-          <p class="sub" id="r-shares-sub"></p>
-          <dl class="kv">
-            <dt>처음 보유</dt><dd id="r-initial-shares"></dd>
-            <dt>재투자로 늘어난 주수</dt><dd id="r-added-shares"></dd>
-            <dt>평균 단가</dt><dd id="r-avg"></dd>
-            <dt>평균 단가 대비 현재가</dt><dd id="r-price-vs-avg"></dd>
-          </dl>
-        </div>
-        <div class="card stat-card">
-          <h2>돈이 늘었나?</h2>
-          <p class="big" id="r-return"></p>
-          <p class="sub" id="r-profit"></p>
-          <dl class="kv">
-            <dt>내가 넣은 원금</dt><dd id="r-principal"></dd>
-            <dt>현재 평가금액</dt><dd id="r-value"></dd>
-            <dt>받은 분배금 합계</dt><dd id="r-dividends"></dd>
-            <dt>재매수 후 남은 현금</dt><dd id="r-cash"></dd>
-          </dl>
-        </div>
+      <div class="card">
+        <h2>주수가 늘었나?</h2>
+        <dl class="kv">
+          <dt>처음 보유</dt><dd id="r-initial-shares"></dd>
+          <dt>재투자로 늘어난 주수</dt><dd id="r-added-shares"></dd>
+          <dt>평균 단가</dt><dd id="r-avg"></dd>
+          <dt>평균 단가 대비 현재가</dt><dd id="r-price-vs-avg"></dd>
+        </dl>
       </div>
 
       <div class="card">
-        <h2>증권사 기준 수익률</h2>
-        <p class="big" id="r-broker-return"></p>
-        <p class="sub" id="r-broker-profit"></p>
+        <h2>돈이 늘었나?</h2>
+        <dl class="kv">
+          <dt>내가 넣은 원금</dt><dd id="r-principal"></dd>
+          <dt>현재 평가금액</dt><dd id="r-value"></dd>
+          <dt>받은 분배금 합계</dt><dd id="r-dividends"></dd>
+          <dt>재매수 후 남은 현금</dt><dd id="r-cash"></dd>
+        </dl>
+      </div>
+
+      <div class="card">
+        <h2>증권사 기준 수익률은 왜 다를까?</h2>
         <dl class="kv">
           <dt>매수원금 (원금 + 재매수 금액)</dt><dd id="r-broker-cost"></dd>
           <dt>보유 주식 평가금액</dt><dd id="r-stock-value"></dd>
@@ -145,7 +199,7 @@
 
     <!-- 시뮬레이션 -->
     <section id="tab-sim" class="panel" role="tabpanel" hidden>
-      <div class="card">
+      <div class="card span-2">
         <h2>시나리오 입력</h2>
         <p class="help">시작점은 지금 보유 주수와 성적표의 현재 주가·환율이에요. 매주 받은 분배금으로 그 주 주가에 다시 산다고 가정해요.</p>
         <div class="scenarios" id="scenario-inputs"></div>
@@ -155,7 +209,7 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card span-2">
         <div class="chart-head">
           <h2 id="chart-title">52주 평가금액 (원)</h2>
           <div class="seg" role="group" aria-label="그래프 항목">
@@ -168,7 +222,7 @@
         <p class="help" id="sim-empty" hidden>현재 보유 주수와 현재 주가·환율이 있어야 시뮬레이션할 수 있어요.</p>
       </div>
 
-      <div class="card">
+      <div class="card span-2">
         <h2>시나리오별 결과</h2>
         <div class="table-wrap">
           <table class="results">
@@ -224,7 +278,9 @@
       <div class="card">
         <h2>초기화</h2>
         <p class="help">모든 기록과 설정을 지워요. 되돌릴 수 없으니 먼저 백업하세요.</p>
-        <button type="button" class="danger" id="btn-reset">모든 데이터 지우기</button>
+        <div class="row">
+          <button type="button" class="danger" id="btn-reset">모든 데이터 지우기</button>
+        </div>
       </div>
     </section>
   </main>
