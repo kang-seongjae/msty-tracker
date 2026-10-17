@@ -1,6 +1,6 @@
 // 화면 담당. 입력을 읽어 state 를 바꾸고, calc.js 로 계산한 결과를 화면에 그립니다.
 
-import { computePortfolio, computeReport, simulate, findTargetWeek, addWeeks } from './calc.js';
+import { computePortfolio, computeReport, computeFxBreakdown, simulate, findTargetWeek, addWeeks } from './calc.js';
 import { loadState, saveState, exportState, importStateFile, defaultState, STORAGE_KEY, SCENARIO_KEYS } from './storage.js';
 import { renderLineChart } from './chart.js';
 import { refreshQuotes, loadApiConfig, saveApiConfig, loadQuoteCache, saveQuoteCache, PRICE_PROVIDERS } from './quotes.js';
@@ -76,6 +76,7 @@ bindNumber('market-fx', () => state.market.fxRate, (v) => { state.market.fxRate 
 bindNumber('s-shares', () => state.settings.initialShares, (v) => (state.settings.initialShares = v));
 bindNumber('s-avg', () => state.settings.initialAvgCost, (v) => (state.settings.initialAvgCost = v));
 bindNumber('s-principal', () => state.settings.principalKRW, (v) => (state.settings.principalKRW = v));
+bindNumber('s-usd', () => state.settings.initialUSD, (v) => (state.settings.initialUSD = v));
 bindNumber('sim-target', () => state.sim.targetKRW, (v) => (state.sim.targetKRW = v));
 
 $('sim-fractional').checked = state.sim.fractional;
@@ -260,6 +261,7 @@ function reloadInputs() {
   setVal('s-shares', state.settings.initialShares);
   setVal('s-avg', state.settings.initialAvgCost);
   setVal('s-principal', state.settings.principalKRW);
+  setVal('s-usd', state.settings.initialUSD);
   setVal('sim-target', state.sim.targetKRW);
   $('sim-fractional').checked = state.sim.fractional;
   buildScenarioInputs();
@@ -270,6 +272,7 @@ function reloadInputs() {
 // ---------- 그리기 ----------
 function render() {
   renderReport();
+  renderFx();
   renderRecords();
   if (!$('tab-sim').hidden) renderSim();
 }
@@ -323,6 +326,37 @@ function renderReport() {
   tone($('r-return-again'), hasMarket ? r.profitKRW : 0);
   $('r-broker-cost').textContent = krw(r.brokerCostKRW);
   $('verdict').className = `verdict ${r.sharesUp ? 's-up' : 's-flat'} ${r.moneyUp ? 'm-up' : 'm-down'}`;
+}
+
+/** 달러 기준 수익률과 환율 효과 카드, 설정 화면의 평균 환전 환율 */
+function renderFx() {
+  const b = computeFxBreakdown(state.settings, state.records, state.market);
+  const fxFmt = (v) => `${v.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}원`;
+  $('s-avgfx').textContent = b.ready
+    ? `평균 환전 환율: ${fxFmt(b.avgFxRate)} (원금 ${krw(state.settings.principalKRW)} ÷ ${usd(b.initialUSD)})`
+    : state.settings.principalKRW > 0 ? '넣은 달러를 입력하면 평균 환전 환율을 계산해 드려요.' : '';
+
+  $('fx-empty').hidden = b.ready;
+  $('fx-body').hidden = !b.ready;
+  if (!b.ready) return;
+
+  const hasMarket = state.market.price > 0 && state.market.fxRate > 0;
+  const set = (id, text, toneValue) => { $(id).textContent = text; tone($(id), hasMarket ? toneValue : 0); };
+  $('fx-initial-usd').textContent = usd(b.initialUSD);
+  $('fx-rate-detail').textContent = `${fxFmt(b.avgFxRate)} → ${hasMarket ? fxFmt(b.fxRate) : '현재 환율 필요'}`;
+  if (!hasMarket) {
+    for (const id of ['fx-usd-return', 'fx-usd-profit', 'fx-rate-change', 'fx-part-usd', 'fx-part-fx', 'fx-part-total', 'fx-value-usd']) set(id, '–', 0);
+    $('fx-usd-profit').textContent = '현재 주가와 환율을 입력하세요';
+    return;
+  }
+  set('fx-usd-return', pct(b.usdReturn), b.usdProfit);
+  set('fx-usd-profit', `손익 ${signed(b.usdProfit, (v) => usd(v))}`, b.usdProfit);
+  set('fx-rate-change', pct(b.fxReturn), b.fxReturn);
+  $('fx-value-usd').textContent = usd(b.valueUSD);
+  // 원 단위 표시값은 합이 총손익과 정확히 맞도록 calc.js 가 맞춰 준 값을 씁니다.
+  set('fx-part-usd', signed(b.display.usdProfitKRW, krw), b.display.usdProfitKRW);
+  set('fx-part-fx', signed(b.display.fxEffectKRW, krw), b.display.fxEffectKRW);
+  set('fx-part-total', signed(b.display.totalKRW, krw), b.display.totalKRW);
 }
 
 function renderRecords() {

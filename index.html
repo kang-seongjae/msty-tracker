@@ -147,6 +147,45 @@
         </dl>
       </div>
 
+      <div class="card span-2">
+        <h2>달러 기준 수익률과 환율 효과</h2>
+        <p class="help fx-empty" id="fx-empty">설정에서 "처음 환전해서 넣은 달러"를 입력하면 달러 기준 수익률과 환율 효과를 나눠서 보여 줘요.</p>
+        <div id="fx-body" hidden>
+          <div class="fx-top">
+            <div class="fx-stat">
+              <p class="eyebrow">달러 기준 수익률</p>
+              <p class="stat-big num" id="fx-usd-return">–</p>
+              <p class="hero-sub num" id="fx-usd-profit"></p>
+            </div>
+            <div class="fx-stat">
+              <p class="eyebrow">환율 변화</p>
+              <p class="stat-big num" id="fx-rate-change">–</p>
+              <p class="hero-sub num" id="fx-rate-detail"></p>
+            </div>
+          </div>
+          <p class="fx-title">총손익 나눠 보기</p>
+          <div class="fx-split">
+            <div class="fx-row">
+              <span class="fx-name">달러 기준 손익<small>달러로 번 돈 × 현재 환율</small></span>
+              <strong class="num" id="fx-part-usd">–</strong>
+            </div>
+            <div class="fx-row">
+              <span class="fx-name">환율 효과<small>넣은 달러 × (현재 환율 − 평균 환전 환율)</small></span>
+              <strong class="num" id="fx-part-fx">–</strong>
+            </div>
+            <div class="fx-row fx-total">
+              <span class="fx-name">총손익</span>
+              <strong class="num" id="fx-part-total">–</strong>
+            </div>
+          </div>
+          <dl class="kv">
+            <dt>처음 넣은 달러</dt><dd id="fx-initial-usd"></dd>
+            <dt>현재 평가금액 (달러)</dt><dd id="fx-value-usd"></dd>
+          </dl>
+          <p class="help">주가와 분배금으로 달러가 얼마나 늘었는지(달러 기준)와, 환율이 바뀌어서 원화로 얼마나 달라졌는지(환율 효과)를 나눴어요. 두 값을 더하면 총손익과 같아요. 원 단위로 반올림한 값이라 환율 효과는 1원 차이가 날 수 있어요.</p>
+        </div>
+      </div>
+
       <div class="card">
         <h2>증권사 기준 수익률은 왜 다를까?</h2>
         <dl class="kv">
@@ -249,7 +288,9 @@
           <label>처음 보유 주수<input type="number" inputmode="decimal" step="any" min="0" id="s-shares"></label>
           <label>처음 평균 단가 ($)<input type="number" inputmode="decimal" step="any" min="0" id="s-avg"></label>
           <label>내가 넣은 원금 (원)<input type="number" inputmode="numeric" step="any" min="0" id="s-principal"></label>
+          <label>처음 환전해서 넣은 달러 ($)<input type="number" inputmode="decimal" step="any" min="0" id="s-usd"></label>
         </div>
+        <p class="help" id="s-avgfx"></p>
         <p class="help">입력하면 바로 저장돼요.</p>
       </form>
 

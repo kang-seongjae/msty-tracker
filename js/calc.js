@@ -155,6 +155,59 @@ function verdictText(addedShares, profitKRW, principalKRW) {
 }
 
 /**
+ * 달러 기준 수익률과 환율 효과. (computeReport 의 기존 수익률 계산은 그대로 두고 따로 계산합니다.)
+ *
+ * U  = 처음 환전해서 넣은 달러 (settings.initialUSD)
+ * P  = 내가 넣은 원화 원금 (settings.principalKRW)
+ * F0 = 평균 환전 환율 = P ÷ U   ← 그래서 P = U × F0
+ * V  = 현재 평가금액(달러) = 보유 주수 × 현재 주가 + 남은 현금
+ * F  = 현재 환율
+ *
+ * 달러 기준 수익률       = (V − U) ÷ U
+ * 총손익(원화)           = V × F − P                (computeReport 의 profitKRW 와 같은 값)
+ *   = 달러 기준 손익(원화) = (V − U) × F            달러로 번 돈을 지금 환율로 환산
+ *   + 환율 효과            = U × (F − F0)           처음 바꾼 달러가 환율 변동으로 얻거나 잃은 원화
+ * 두 값을 더하면 (V − U)F + UF − UF0 = VF − P 로 총손익과 정확히 같습니다.
+ *
+ * 화면에는 원 단위로 반올림해 보여 주므로, 반올림해도 합이 맞도록 display 값도 함께 돌려줍니다.
+ */
+export function computeFxBreakdown(settings, records, market) {
+  const r = computeReport(settings, records, market);
+  const U = num(settings.initialUSD);
+  const P = r.principalKRW;
+  const F = r.fxRate;
+  const V = r.valueUSD;
+  if (!(U > 0) || !(P > 0)) {
+    return { ready: false, initialUSD: U, avgFxRate: null, profitKRW: r.profitKRW };
+  }
+  const F0 = P / U;
+  const usdProfit = V - U;
+  const usdReturn = usdProfit / U;
+  const usdProfitKRW = usdProfit * F;
+  const fxEffectKRW = U * (F - F0);
+  const fxReturn = F0 > 0 ? F / F0 - 1 : null;
+
+  // 원 단위 표시: 총손익과 달러 기준 손익을 반올림하고, 환율 효과는 그 차이로 정해 합이 꼭 맞게 함
+  const totalWon = Math.round(r.profitKRW);
+  const usdWon = Math.round(usdProfitKRW);
+
+  return {
+    ready: true,
+    initialUSD: U,
+    avgFxRate: F0,
+    fxRate: F,
+    valueUSD: V,
+    usdProfit,
+    usdReturn,
+    usdProfitKRW,
+    fxEffectKRW,
+    fxReturn,
+    profitKRW: r.profitKRW,
+    display: { totalKRW: totalWon, usdProfitKRW: usdWon, fxEffectKRW: totalWon - usdWon },
+  };
+}
+
+/**
  * 한 시나리오를 weeks주 동안 매주 시뮬레이션합니다.
  *
  * start:    { shares, cashUSD, price, fxRate }  — 지금 상태

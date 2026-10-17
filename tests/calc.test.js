@@ -1,5 +1,5 @@
 import { test, assertEqual, assertClose, assert } from './mini-test.js';
-import { computePortfolio, computeReport, simulate, findTargetWeek, addWeeks, sortRecords } from '../js/calc.js';
+import { computePortfolio, computeReport, computeFxBreakdown, simulate, findTargetWeek, addWeeks, sortRecords } from '../js/calc.js';
 import { normalizeState, defaultState } from '../js/storage.js';
 
 // 요청서의 예시: 처음 100주, 평균 단가 $15, 주당 $0.2씩 2주 분배
@@ -151,9 +151,90 @@ test('백업 불러오기: 빠진 값은 기본값으로 채우고 잘못된 파
 
 test('백업 내보내기 → 불러오기 하면 데이터가 그대로', () => {
   const s = defaultState();
-  s.settings = { ...settings };
+  s.settings = { ...settings, initialUSD: 1600 };
   s.records = records.map((r) => ({ ...r }));
   s.market = { price: 13, fxRate: 1400 };
   const back = normalizeState(JSON.parse(JSON.stringify(s)));
   assertEqual(JSON.stringify(back), JSON.stringify(s));
+});
+
+test('예전 백업(넣은 달러 칸 없음)을 불러오면 넣은 달러는 0', () => {
+  const s = normalizeState({ settings: { initialShares: 100, initialAvgCost: 15, principalKRW: 2_000_000 }, records: [] });
+  assertEqual(s.settings.initialUSD, 0);
+  assertEqual(s.settings.principalKRW, 2_000_000);
+});
+
+// ---------- 달러 기준 수익률과 환율 효과 ----------
+// 원금 200만 원을 1,600달러로 환전 → 평균 환전 환율 1,250원
+const usdSettings = { ...settings, initialUSD: 1600 };
+const market1400 = { price: 13, fxRate: 1400 };
+
+test('평균 환전 환율 = 원화 원금 ÷ 넣은 달러', () => {
+  const b = computeFxBreakdown(usdSettings, records, market1400);
+  assert(b.ready, '계산 가능해야 함');
+  assertClose(b.avgFxRate, 1250, 1e-12);
+});
+
+test('달러 기준 수익률 = (현재 평가금액 달러 − 넣은 달러) ÷ 넣은 달러', () => {
+  const b = computeFxBreakdown(usdSettings, records, market1400);
+  const V = 103 * 13 + 0.2; // 1,339.2달러 (남은 현금 포함)
+  assertClose(b.valueUSD, V, 1e-9);
+  assertClose(b.usdProfit, V - 1600, 1e-9);
+  assertClose(b.usdReturn, (V - 1600) / 1600, 1e-12);
+  assertEqual((b.usdReturn * 100).toFixed(2), '-16.30');
+});
+
+test('예시: 달러 기준 손익 −365,120원 + 환율 효과 +240,000원 = 총손익 −125,120원', () => {
+  const b = computeFxBreakdown(usdSettings, records, market1400);
+  assertClose(b.usdProfitKRW, (1339.2 - 1600) * 1400, 1e-6); // −365,120
+  assertClose(b.fxEffectKRW, 1600 * (1400 - 1250), 1e-6); // +240,000
+  assertClose(b.profitKRW, -125_120, 1e-6);
+  assertClose(b.usdProfitKRW + b.fxEffectKRW, b.profitKRW, 1e-6);
+  assertEqual(b.display.usdProfitKRW, -365_120);
+  assertEqual(b.display.fxEffectKRW, 240_000);
+  assertEqual(b.display.totalKRW, -125_120);
+});
+
+test('총손익은 기존 성적표(computeReport)의 손익과 같고, 기존 수익률은 그대로', () => {
+  const b = computeFxBreakdown(usdSettings, records, market1400);
+  const r = computeReport(usdSettings, records, market1400);
+  const old = computeReport(settings, records, market1400); // 넣은 달러 없이 계산한 기존 값
+  assertEqual(b.profitKRW, r.profitKRW);
+  assertEqual(r.totalReturn, old.totalReturn);
+  assertEqual(r.brokerReturn, old.brokerReturn);
+});
+
+test('여러 무작위 경우에도 달러 기준 손익 + 환율 효과 = 총손익 (원 단위 표시도 정확히 합이 맞음)', () => {
+  let seed = 12345;
+  const rand = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  for (let i = 0; i < 500; i++) {
+    const s = {
+      initialShares: Math.floor(rand() * 2000),
+      initialAvgCost: 5 + rand() * 30,
+      principalKRW: Math.round(100_000 + rand() * 100_000_000),
+      initialUSD: 0,
+    };
+    s.initialUSD = Math.round((s.principalKRW / (1100 + rand() * 400)) * 100) / 100;
+    const recs = Array.from({ length: Math.floor(rand() * 10) }, (_, k) => ({
+      id: `x${k}`, date: `2026-0${1 + (k % 9)}-1${k % 10}`,
+      dividendUSD: rand() * 300, sharesBought: Math.floor(rand() * 20), price: 5 + rand() * 30, fxRate: 1200 + rand() * 300,
+    }));
+    const m = { price: 1 + rand() * 40, fxRate: 1000 + rand() * 600 };
+    const b = computeFxBreakdown(s, recs, m);
+    const tol = Math.max(1e-6, Math.abs(b.profitKRW) * 1e-12);
+    assertClose(b.usdProfitKRW + b.fxEffectKRW, b.profitKRW, tol, `경우 ${i}`);
+    assertEqual(b.display.usdProfitKRW + b.display.fxEffectKRW, b.display.totalKRW, `경우 ${i} 표시값 합`);
+    assert(Math.abs(b.display.fxEffectKRW - b.fxEffectKRW) <= 1, `경우 ${i}: 표시용 환율 효과는 실제 값과 1원 이내`);
+  }
+});
+
+test('환율이 평균 환전 환율과 같으면 환율 효과 0, 총손익은 모두 달러 기준 손익', () => {
+  const b = computeFxBreakdown(usdSettings, records, { price: 13, fxRate: 1250 });
+  assertClose(b.fxEffectKRW, 0, 1e-9);
+  assertClose(b.usdProfitKRW, b.profitKRW, 1e-6);
+});
+
+test('넣은 달러나 원금이 없으면 달러 기준 계산은 하지 않음', () => {
+  assertEqual(computeFxBreakdown(settings, records, market1400).ready, false);
+  assertEqual(computeFxBreakdown({ ...usdSettings, principalKRW: 0 }, records, market1400).ready, false);
 });

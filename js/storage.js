@@ -6,7 +6,7 @@ export const SCENARIO_KEYS = ['optimistic', 'base', 'pessimistic'];
 export function defaultState() {
   return {
     version: 1,
-    settings: { initialShares: 0, initialAvgCost: 0, principalKRW: 0 },
+    settings: { initialShares: 0, initialAvgCost: 0, principalKRW: 0, initialUSD: 0 },
     records: [],
     market: { price: 0, fxRate: 0 },
     sim: {
@@ -46,6 +46,7 @@ export function normalizeState(raw) {
       initialShares: n(s.initialShares),
       initialAvgCost: n(s.initialAvgCost),
       principalKRW: n(s.principalKRW),
+      initialUSD: n(s.initialUSD), // 처음 환전해서 넣은 달러 (예전 데이터에는 없어서 0)
     },
     records: records
       .filter((r) => r && typeof r.date === 'string')

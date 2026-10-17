@@ -208,6 +208,20 @@ button:focus-visible, .button:focus-within, .tabs button:focus-visible { outline
 .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; }
 .swatch.line { width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
 
+/* 달러 기준 수익률과 환율 효과 */
+.fx-empty { margin-top: 0; }
+.fx-top { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fx-stat { background: var(--surface-2); border-radius: 16px; padding: 16px; min-width: 0; }
+.fx-stat .hero-sub { font-size: 0.85rem; }
+.fx-title { margin: 22px 0 8px; color: var(--text-2); font-size: 0.875rem; font-weight: 600; }
+.fx-split { display: grid; margin-bottom: 18px; }
+.fx-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.fx-row strong { font-size: 1.1rem; font-weight: 800; white-space: nowrap; }
+.fx-name { display: grid; gap: 2px; font-weight: 600; }
+.fx-name small { color: var(--text-3); font-size: 0.75rem; font-weight: 500; }
+.fx-total { border-bottom: 0; }
+.fx-total .fx-name { color: var(--text-2); }
+
 /* 참고 시세 */
 .ref-list { display: grid; }
 .ref-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 12px 0; }
