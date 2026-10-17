@@ -236,5 +236,13 @@ test('환율이 평균 환전 환율과 같으면 환율 효과 0, 총손익은 
 
 test('넣은 달러나 원금이 없으면 달러 기준 계산은 하지 않음', () => {
   assertEqual(computeFxBreakdown(settings, records, market1400).ready, false);
+  // 예전 데이터: initialUSD 항목 자체가 없거나, null·빈 값·숫자가 아닌 값
+  for (const v of [undefined, null, '', 0, 'abc', -100]) {
+    const b = computeFxBreakdown({ ...settings, initialUSD: v }, records, market1400);
+    assertEqual(b.ready, false, `initialUSD=${String(v)}`);
+    assertEqual(b.avgFxRate, null);
+  }
+  // 시세가 아직 없을 때(0)도 오류 없이 계산
+  assert(computeFxBreakdown(usdSettings, records, { price: 0, fxRate: 0 }).ready, '시세 없어도 계산은 됨');
   assertEqual(computeFxBreakdown({ ...usdSettings, principalKRW: 0 }, records, market1400).ready, false);
 });

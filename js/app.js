@@ -19,7 +19,30 @@ let quoteCache = loadQuoteCache();
 let quotesLoading = false;
 let prefilled = { price: null, fx: null }; // 기록 폼에 미리 채운 값 (사용자가 고쳤는지 알아보려고 기억)
 
-const $ = (id) => document.getElementById(id);
+/**
+ * id 로 화면 요소를 찾습니다. 없으면(예: 옛 index.html 과 새 app.js 가 섞였을 때) null 대신
+ * 화면에 붙지 않은 빈 요소를 돌려줘서, 값을 넣거나 이벤트를 다는 코드가 멈추지 않게 합니다.
+ * 빠진 id 는 콘솔에 한 번만 알립니다.
+ */
+const missingIds = new Set();
+const $ = (id) => {
+  const el = document.getElementById(id);
+  if (el) return el;
+  if (!missingIds.has(id)) {
+    missingIds.add(id);
+    console.error(`화면 요소 #${id} 를 찾지 못했어요. 페이지를 새로고침해 주세요.`);
+  }
+  return document.createElement(id.startsWith('tab-') ? 'section' : 'input');
+};
+
+/** 카드 하나를 그리다 오류가 나도 나머지 카드는 계속 그리도록 감쌉니다. */
+function safe(name, fn) {
+  try {
+    return fn();
+  } catch (e) {
+    console.error(`[${name}] 그리는 중 오류`, e);
+  }
+}
 
 // ---------- 숫자 표시 ----------
 const krw = (v) => `${Math.round(v).toLocaleString('ko-KR')}원`;
@@ -271,10 +294,10 @@ function reloadInputs() {
 
 // ---------- 그리기 ----------
 function render() {
-  renderReport();
-  renderFx();
-  renderRecords();
-  if (!$('tab-sim').hidden) renderSim();
+  safe('성적표', renderReport);
+  safe('달러 기준·환율 효과', renderFx);
+  safe('분배 기록', renderRecords);
+  if (!$('tab-sim').hidden) safe('시뮬레이션', renderSim);
 }
 
 function renderReport() {
@@ -530,12 +553,11 @@ async function loadQuotes(force = false) {
     }
     if (changed) update();
     quoteStatus = { price: r.price, fx: r.fx };
-    renderQuoteLabels();
-    renderQuoteStatus(r);
     refStatus = { mstr: r.mstr, btc: r.btc };
-    renderReference();
-    prefillFromQuotes();
-    updateHint();
+    safe('시세 출처', renderQuoteLabels);
+    safe('시세 안내', () => renderQuoteStatus(r));
+    safe('참고 시세', renderReference);
+    safe('기록 미리 채우기', () => { prefillFromQuotes(); updateHint(); });
     return r;
   } finally {
     quotesLoading = false;
@@ -622,13 +644,13 @@ $('api-key-clear').addEventListener('click', () => {
 });
 
 // ---------- 시작 ----------
-buildScenarioInputs();
-renderApiForm();
-resetForm();
+safe('시나리오 입력', buildScenarioInputs);
+safe('API 설정', renderApiForm);
+safe('기록 입력칸', resetForm);
 render();
-renderQuoteLabels();
-renderReference();
-loadQuotes(false);
+safe('시세 출처', renderQuoteLabels);
+safe('참고 시세', renderReference);
+loadQuotes(false).catch((e) => console.error('[시세] 가져오는 중 오류', e));
 
 // 인터넷이 다시 연결되면 시세를 새로 가져옵니다.
 window.addEventListener('online', () => loadQuotes(true));
@@ -645,9 +667,17 @@ if ('serviceWorker' in navigator) {
     location.reload();
   });
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').then((reg) => reg.update()).catch(() => {});
+    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+      .then((reg) => {
+        reg.update().catch(() => {});
+        // 설치한 앱을 오래 켜 둔 채 다시 볼 때도 새 버전이 있는지 확인
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') reg.update().catch(() => {});
+        });
+      })
+      .catch(() => {});
   });
 }
 let startTab = 'report';
 try { startTab = sessionStorage.getItem('msty-tab') || 'report'; } catch {}
-showTab(startTab);
+safe('탭', () => showTab(startTab));

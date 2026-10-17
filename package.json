@@ -5,6 +5,7 @@
   "description": "MSTY 분배금 재투자 기록·시뮬레이션 웹 앱",
   "type": "module",
   "scripts": {
-    "test": "node tests/run.js"
+    "test": "node tests/run.js",
+    "stamp": "node scripts/stamp-sw.mjs"
   }
 }
