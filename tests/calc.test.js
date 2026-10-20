@@ -1,5 +1,5 @@
 import { test, assertEqual, assertClose, assert } from './mini-test.js';
-import { computePortfolio, computeReport, computeFxBreakdown, compareToPrincipal, simulate, findTargetWeek, addWeeks, sortRecords } from '../js/calc.js';
+import { computePortfolio, computeReport, computeFxBreakdown, compareToPrincipal, projectedDistribution, distributionSeries, distributionTrend, simulate, findTargetWeek, addWeeks, sortRecords } from '../js/calc.js';
 import { normalizeState, defaultState } from '../js/storage.js';
 
 // 요청서의 예시: 처음 100주, 평균 단가 $15, 주당 $0.2씩 2주 분배
@@ -435,4 +435,72 @@ test('원금 대비: 남은 원금이 0이면(전부 팔았거나 원금 미입�
   assertEqual(compareToPrincipal(0, allSold).remaining.rate, null);
   assert(Number.isFinite(compareToPrincipal(0, allSold).overall.rate), '전체 기준은 계산됨');
   assertEqual(compareToPrincipal(1000, computeReport({ ...settings, principalKRW: 0 }, records, market1400)).remaining.rate, null);
+});
+
+// ---------- 시뮬레이션: 예상 분배금 ----------
+
+test('예상 분배금(1회): 보유 주수 × 주당 분배금, 원화는 그때 환율, 주가 대비 = 주당 분배금 ÷ 주가', () => {
+  const d = projectedDistribution({ shares: 200, price: 10, fxRate: 1400 }, 0.2);
+  assertClose(d.totalUSD, 40, 1e-12);
+  assertClose(d.totalKRW, 56_000, 1e-9);
+  assertClose(d.yieldOnPrice, 0.02, 1e-15);
+  assertEqual(projectedDistribution({ shares: 10, price: 0, fxRate: 1400 }, 0.2).yieldOnPrice, null);
+});
+
+test('예상 분배금은 시뮬레이션이 다음 주에 실제로 주는 분배금과 같음', () => {
+  const sc = { dps: 0.2, priceChangePct: 0, fxRate: '' };
+  const pts = simulate({ shares: 100, cashUSD: 0, price: 15, fxRate: 1400 }, sc, { weeks: 3, fractional: true });
+  for (let w = 0; w < 3; w++) {
+    // 소수점 매수면 받은 분배금은 전부 주식이 됨 → 늘어난 주수 × 주가 = 그 주 분배금
+    const paid = (pts[w + 1].shares - pts[w].shares) * 15;
+    assertClose(projectedDistribution(pts[w], sc.dps).totalUSD, paid, 1e-9, `${w}주차`);
+  }
+});
+
+// ---------- 성적표: 회차별 분배금 ----------
+
+test('회차별 분배금: 총액(달러·원화), 받은 시점 보유 주수, 주당 분배금', () => {
+  const s = distributionSeries(settings, records);
+  assertEqual(s.length, 2);
+  assertEqual(s[0].sharesHeld, 100); // 1회차는 재매수 전 100주
+  assertEqual(s[1].sharesHeld, 101); // 2회차는 1회차에 1주 산 뒤
+  assertClose(s[0].perShareUSD, 0.2, 1e-15);
+  assertClose(s[1].perShareUSD, 0.2, 1e-15);
+  assertClose(s[0].totalKRW, 20 * 1400, 1e-9);
+  assertClose(s[1].totalKRW, 20.2 * 1410, 1e-9);
+  assertEqual(s[1].date, '2026-01-09');
+});
+
+test('회차별 분배금: 날짜순으로 정렬되고, 그 사이 매도는 보유 주수에 반영', () => {
+  const s = distributionSeries(settings, [records[1], records[0]], [{ id: 's', date: '2026-01-05', shares: 10, price: 15, feeUSD: 0, fxRate: '' }]);
+  assertEqual(s[0].date, '2026-01-02');
+  assertEqual(s[1].sharesHeld, 91); // 101주에서 10주 판 뒤
+  assertClose(s[1].perShareUSD, 20.2 / 91, 1e-15);
+  assertEqual(distributionSeries(settings, []).length, 0);
+});
+
+test('받는 돈 추세: 8회 이상이면 처음 4회 vs 최근 4회 평균', () => {
+  const series = Array.from({ length: 10 }, (_, i) => ({ totalKRW: (i + 1) * 1000, totalUSD: i + 1, sharesHeld: 100 + i, perShareUSD: (i + 1) / (100 + i) }));
+  const t = distributionTrend(series);
+  assertEqual(t.k, 4);
+  assertEqual(t.first.totalKRW, 2500); // 1~4회 평균
+  assertEqual(t.last.totalKRW, 8500); // 7~10회 평균
+  assertClose(t.changeKRW, 8500 / 2500 - 1, 1e-12);
+  assertClose(t.changeUSD, 8.5 / 2.5 - 1, 1e-12);
+  assertClose(t.changeShares, 107.5 / 101.5 - 1, 1e-12);
+});
+
+test('받는 돈 추세: 8회보다 적으면 반씩(홀수면 가운데 빼고), 2회 미만이면 비교 안 함', () => {
+  const mk = (n) => Array.from({ length: n }, (_, i) => ({ totalKRW: (i + 1) * 100, totalUSD: i + 1, sharesHeld: 10, perShareUSD: (i + 1) / 10 }));
+  const t5 = distributionTrend(mk(5));
+  assertEqual(t5.k, 2);
+  assertEqual(t5.first.totalKRW, 150); // 1·2회
+  assertEqual(t5.last.totalKRW, 450); // 4·5회
+  assertEqual(distributionTrend(mk(7)).k, 3);
+  assertEqual(distributionTrend(mk(2)).k, 1);
+  assertEqual(distributionTrend(mk(1)), null);
+  assertEqual(distributionTrend([]), null);
+  // 줄어드는 경우
+  const down = distributionTrend(mk(6).reverse());
+  assert(down.changeKRW < 0, '줄면 음수');
 });

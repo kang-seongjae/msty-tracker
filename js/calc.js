@@ -376,6 +376,84 @@ export function compareToPrincipal(valueKRW, report) {
 }
 
 /**
+ * 시뮬레이션 한 시점(simulate 결과의 한 점)에서 받을 것으로 예상되는 분배금, 1회 기준.
+ * - 1회 분배금(달러) = 그때 보유 주수 × 주당 분배금(시나리오 값)
+ * - 원화 = 달러 × 그때 환율
+ * - 주가 대비 = 주당 분배금 ÷ 그때 주가  (보유 주식 가치 대비 1회 분배율과 같음)
+ */
+export function projectedDistribution(point, dps) {
+  const perShareUSD = num(dps);
+  const totalUSD = num(point.shares) * perShareUSD;
+  const price = num(point.price);
+  return {
+    perShareUSD,
+    totalUSD,
+    totalKRW: totalUSD * num(point.fxRate),
+    yieldOnPrice: price > 0 ? perShareUSD / price : null,
+  };
+}
+
+/**
+ * 분배 기록을 회차별로 정리합니다(그래프용). 날짜순.
+ * - 총액 = 그 회차에 실제로 받은 세후 분배금(달러), 원화는 그 기록의 환율로
+ * - 받은 시점 보유 주수 = 그 회차에 재매수하기 전 주수 (매도 기록도 날짜순으로 반영)
+ * - 주당 분배금 = 총액(달러) ÷ 받은 시점 보유 주수
+ * 총액 = 보유 주수 × 주당 분배금 이므로, 두 값을 나란히 보면 "주수가 늘어난 효과"와 "주당 분배금 변화"를 나눠 볼 수 있습니다.
+ */
+export function distributionSeries(settings, records, sells = []) {
+  const p = computePortfolio(settings, records, sells);
+  const recs = sortRecords(records); // history 와 같은 순서
+  return p.history.map((h, i) => {
+    const rec = recs[i];
+    const totalUSD = num(rec.dividendUSD);
+    const fxRate = num(rec.fxRate);
+    const sharesHeld = h.shares - num(rec.sharesBought);
+    return {
+      id: h.id,
+      date: h.date,
+      totalUSD,
+      totalKRW: totalUSD * fxRate,
+      fxRate,
+      sharesHeld,
+      perShareUSD: sharesHeld > 0 ? totalUSD / sharesHeld : null,
+    };
+  });
+}
+
+/**
+ * 처음 몇 회와 최근 몇 회의 평균을 비교해 받는 돈이 늘고 있는지 봅니다.
+ * - 8회 이상이면 처음 4회 vs 최근 4회, 적으면 반씩 나눠 비교 (홀수면 가운데 1회는 빼고). 2회 미만이면 null.
+ * - 총액 변화와 함께 보유 주수·주당 분배금 변화도 돌려줍니다 (총액 = 주수 × 주당 분배금).
+ */
+export function distributionTrend(series) {
+  const n = series.length;
+  const k = n >= 8 ? 4 : Math.floor(n / 2);
+  if (k < 1) return null;
+  const first = series.slice(0, k);
+  const last = series.slice(n - k);
+  const avg = (arr, key) => arr.reduce((sum, x) => sum + num(x[key]), 0) / arr.length;
+  const change = (a, b) => (a > 0 ? b / a - 1 : null);
+  const g = (arr) => ({
+    totalKRW: avg(arr, 'totalKRW'),
+    totalUSD: avg(arr, 'totalUSD'),
+    sharesHeld: avg(arr, 'sharesHeld'),
+    perShareUSD: avg(arr, 'perShareUSD'),
+  });
+  const a = g(first);
+  const b = g(last);
+  return {
+    n,
+    k,
+    first: a,
+    last: b,
+    changeKRW: change(a.totalKRW, b.totalKRW),
+    changeUSD: change(a.totalUSD, b.totalUSD),
+    changeShares: change(a.sharesHeld, b.sharesHeld),
+    changePerShare: change(a.perShareUSD, b.perShareUSD),
+  };
+}
+
+/**
  * 한 시나리오를 weeks주 동안 매주 시뮬레이션합니다.
  *
  * start:    { shares, cashUSD, price, fxRate }  — 지금 상태

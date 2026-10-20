@@ -111,3 +111,119 @@ export function renderLineChart(container, { series, target = null, baseline = n
   container.appendChild(svg);
   container.appendChild(tip);
 }
+
+/**
+ * 회차별 분배금 그래프: 위 칸은 총액 막대, 아래 칸은 주당 분배금 선. 두 칸은 회차(가로 위치)가 똑같이 맞춰져 있습니다.
+ * (단위가 다른 두 값을 한 축에 겹치면 축 두 개가 필요해 오해하기 쉬워서, 위아래로 나눠 그립니다.)
+ *
+ * items: [{ total, perShare }]  — total 은 지금 단위(원 또는 달러)의 총액, perShare 는 주당 분배금(달러, 없으면 null)
+ * labels: 회차별 x축 글자(예: '10/2')
+ */
+export function renderDistributionChart(container, { items, labels, formatTotalTick, formatPerShareTick, formatTooltip }) {
+  container.innerHTML = '';
+  const n = items.length;
+  if (n === 0) return;
+  const width = Math.max(container.clientWidth, 280);
+  const narrow = width < 500;
+  const m = { top: 22, right: 12, bottom: 24, left: narrow ? 52 : 64 };
+  const barH = narrow ? 150 : 190;
+  const gapH = 34; // 두 칸 사이 (아래 칸 이름이 들어감)
+  const lineH = narrow ? 76 : 96;
+  const height = m.top + barH + gapH + lineH + m.bottom;
+  const w = width - m.left - m.right;
+  const band = w / n;
+  const cx = (i) => m.left + band * (i + 0.5);
+
+  const svg = el('svg', { viewBox: `0 0 ${width} ${height}`, width, height, class: 'chart-svg', role: 'img' });
+
+  // ----- 위 칸: 총액 막대 (0부터) -----
+  const totals = items.map((d) => d.total);
+  let tMax = Math.max(...totals, 0);
+  if (tMax <= 0) tMax = 1;
+  const tStep = niceStep(tMax, 3);
+  tMax = Math.ceil(tMax / tStep) * tStep;
+  const barTop = m.top;
+  const barBase = m.top + barH;
+  const yBar = (v) => barBase - (v / tMax) * barH;
+  for (let v = 0; v <= tMax + tStep / 2; v += tStep) {
+    el('line', { x1: m.left, x2: m.left + w, y1: yBar(v), y2: yBar(v), class: 'grid' }, svg);
+    el('text', { x: m.left - 6, y: yBar(v) + 4, 'text-anchor': 'end', class: 'tick' }, svg).textContent = formatTotalTick(v);
+  }
+  el('text', { x: m.left, y: barTop - 10, class: 'panel-label' }, svg).textContent = '회차별 총액';
+
+  const bw = Math.max(2, Math.min(28, band * 0.62));
+  items.forEach((d, i) => {
+    const hgt = Math.max(0, barBase - yBar(d.total));
+    if (hgt <= 0) return;
+    const x0 = cx(i) - bw / 2;
+    const r = Math.min(4, bw / 2, hgt);
+    const top = barBase - hgt;
+    // 위쪽 모서리만 둥글게, 아래는 바닥선에 붙임
+    const dPath = `M${x0},${barBase}V${top + r}Q${x0},${top} ${x0 + r},${top}H${x0 + bw - r}Q${x0 + bw},${top} ${x0 + bw},${top + r}V${barBase}Z`;
+    el('path', { d: dPath, class: 'dist-bar' }, svg);
+  });
+
+  // ----- 아래 칸: 주당 분배금 선 -----
+  const lineTop = barBase + gapH;
+  const lineBase = lineTop + lineH;
+  const ps = items.map((d) => d.perShare).filter((v) => v != null && Number.isFinite(v));
+  if (ps.length) {
+    let lo = Math.min(...ps);
+    let hi = Math.max(...ps);
+    if (lo === hi) { const pad = Math.abs(lo) * 0.1 || 0.01; lo -= pad; hi += pad; }
+    const step = niceStep(hi - lo, 2);
+    lo = Math.floor(lo / step) * step;
+    hi = Math.ceil(hi / step) * step;
+    const yLine = (v) => lineBase - ((v - lo) / (hi - lo)) * lineH;
+    for (let v = lo; v <= hi + step / 2; v += step) {
+      el('line', { x1: m.left, x2: m.left + w, y1: yLine(v), y2: yLine(v), class: 'grid' }, svg);
+      el('text', { x: m.left - 6, y: yLine(v) + 4, 'text-anchor': 'end', class: 'tick' }, svg).textContent = formatPerShareTick(v);
+    }
+    el('text', { x: m.left, y: lineTop - 10, class: 'panel-label' }, svg).textContent = '주당 분배금';
+    let dLine = '';
+    let pen = false;
+    items.forEach((d, i) => {
+      if (d.perShare == null || !Number.isFinite(d.perShare)) { pen = false; return; }
+      dLine += `${pen ? 'L' : 'M'}${cx(i).toFixed(1)},${yLine(d.perShare).toFixed(1)}`;
+      pen = true;
+    });
+    el('path', { d: dLine, class: 'dist-line' }, svg);
+    if (n <= 40) items.forEach((d, i) => { if (d.perShare != null) el('circle', { cx: cx(i), cy: yLine(d.perShare), r: 3, class: 'dist-dot' }, svg); });
+  }
+
+  // x축 글자: 너무 많으면 건너뛰고, 마지막 회차는 꼭 표시
+  const every = Math.max(1, Math.ceil(n / (narrow ? 5 : 10)));
+  for (let i = 0; i < n; i++) {
+    if (i % every !== 0 && i !== n - 1) continue;
+    if (i !== n - 1 && n - 1 - i < every / 2) continue; // 마지막 글자와 겹치지 않게
+    el('text', { x: cx(i), y: lineBase + 18, 'text-anchor': 'middle', class: 'tick' }, svg).textContent = labels[i];
+  }
+
+  // 마우스/터치: 회차 한 칸 전체가 반응 영역
+  const hover = el('g', { visibility: 'hidden' }, svg);
+  const hl = el('rect', { y: barTop, height: lineBase - barTop, class: 'dist-hover' }, hover);
+  const tip = document.createElement('div');
+  tip.className = 'chart-tip';
+  tip.hidden = true;
+  const overlay = el('rect', { x: m.left, y: barTop, width: w, height: lineBase - barTop, fill: 'transparent' }, svg);
+  const show = (clientX) => {
+    const rect = svg.getBoundingClientRect();
+    const px = ((clientX - rect.left) / rect.width) * width;
+    const i = Math.floor((px - m.left) / band);
+    if (i < 0 || i >= n) return;
+    hover.setAttribute('visibility', 'visible');
+    hl.setAttribute('x', m.left + band * i);
+    hl.setAttribute('width', band);
+    tip.innerHTML = formatTooltip(i);
+    tip.hidden = false;
+    const left = (cx(i) / width) * rect.width;
+    tip.style.left = `${left}px`;
+    tip.style.transform = left > rect.width / 2 ? 'translateX(calc(-100% - 12px))' : 'translateX(12px)';
+  };
+  overlay.addEventListener('pointermove', (e) => show(e.clientX));
+  overlay.addEventListener('pointerdown', (e) => show(e.clientX));
+  overlay.addEventListener('pointerleave', () => { hover.setAttribute('visibility', 'hidden'); tip.hidden = true; });
+
+  container.appendChild(svg);
+  container.appendChild(tip);
+}

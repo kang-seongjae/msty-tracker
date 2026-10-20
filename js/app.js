@@ -1,8 +1,8 @@
 // 화면 담당. 입력을 읽어 state 를 바꾸고, calc.js 로 계산한 결과를 화면에 그립니다.
 
-import { computePortfolio, computeReport, computeFxBreakdown, compareToPrincipal, simulate, findTargetWeek, addWeeks } from './calc.js';
+import { computePortfolio, computeReport, computeFxBreakdown, compareToPrincipal, projectedDistribution, distributionSeries, distributionTrend, simulate, findTargetWeek, addWeeks } from './calc.js';
 import { loadState, saveState, exportState, importStateFile, defaultState, STORAGE_KEY, SCENARIO_KEYS } from './storage.js';
-import { renderLineChart } from './chart.js';
+import { renderLineChart, renderDistributionChart } from './chart.js';
 import { refreshQuotes, loadApiConfig, saveApiConfig, loadQuoteCache, saveQuoteCache, PRICE_PROVIDERS } from './quotes.js';
 
 const SCENARIO_META = {
@@ -78,7 +78,8 @@ function showTab(name) {
   document.querySelectorAll('[role=tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
   document.querySelectorAll('[role=tabpanel]').forEach((p) => (p.hidden = p.id !== `tab-${name}`));
   try { sessionStorage.setItem('msty-tab', name); } catch {}
-  if (name === 'sim') renderSim();
+  if (name === 'sim') safe('시뮬레이션', renderSim);
+  if (name === 'report') safe('회차별 분배금', renderDistributions); // 숨겨진 채로 그리면 너비가 0이라 보일 때 다시 그림
 }
 document.querySelectorAll('[role=tab]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
 document.querySelectorAll('[data-goto]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.goto)));
@@ -402,6 +403,7 @@ function reloadInputs() {
 function render() {
   safe('성적표', renderReport);
   safe('달러 기준·환율 효과', renderFx);
+  safe('회차별 분배금', renderDistributions);
   safe('분배 기록', renderRecords);
   safe('매도 기록', renderSells);
   if (!$('tab-sim').hidden) safe('시뮬레이션', renderSim);
@@ -457,6 +459,59 @@ function renderReport() {
   $('r-broker-cost').textContent = krw(r.brokerCostKRW);
   safe('남은 주식·전체 기준', () => renderSellSummary(r, hasMarket));
   $('verdict').className = `verdict ${r.sharesUp ? 's-up' : 's-flat'} ${r.moneyUp ? 'm-up' : 'm-down'}`;
+}
+
+// ---------- 회차별 분배금 ----------
+let distUnit = 'krw';
+document.querySelectorAll('[data-dist-unit]').forEach((b) =>
+  b.addEventListener('click', () => {
+    distUnit = b.dataset.distUnit;
+    document.querySelectorAll('[data-dist-unit]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    safe('회차별 분배금', renderDistributions);
+  })
+);
+
+/** 성적표의 "회차별 분배금" 카드: 총액 막대 + 주당 분배금 선, 처음/최근 평균 비교 */
+function renderDistributions() {
+  const series = distributionSeries(state.settings, state.records, state.sells);
+  const has = series.length > 0;
+  $('dist-empty').hidden = has;
+  $('dist-body').hidden = !has;
+  if (!has) { $('dist-chart').innerHTML = ''; $('dist-trend').innerHTML = ''; return; }
+
+  const isKRW = distUnit === 'krw';
+  $('dist-legend-bar').textContent = isKRW ? '받은 총액 (원, 세후)' : '받은 총액 ($, 세후)';
+  const md = (d) => { const [, mm, dd] = d.split('-'); return `${Number(mm)}/${Number(dd)}`; };
+  renderDistributionChart($('dist-chart'), {
+    items: series.map((s) => ({ total: isKRW ? s.totalKRW : s.totalUSD, perShare: s.perShareUSD })),
+    labels: series.map((s) => md(s.date)),
+    formatTotalTick: isKRW ? shortKRW : (v) => `$${+v.toFixed(2)}`,
+    formatPerShareTick: (v) => `$${+v.toFixed(3)}`,
+    formatTooltip: (i) => {
+      const s = series[i];
+      return `<strong>${i + 1}회차 · ${escapeHTML(s.date)}</strong>`
+        + `<div>받은 총액 ${krw(s.totalKRW)} (${usd(s.totalUSD)})</div>`
+        + `<div>받은 시점 보유 ${sharesFmt(s.sharesHeld)}</div>`
+        + `<div>주당 분배금 ${s.perShareUSD == null ? '–' : usd(s.perShareUSD, 4)}</div>`;
+    },
+  });
+
+  // 처음 k회 평균 vs 최근 k회 평균
+  const t = distributionTrend(series);
+  if (!t) {
+    $('dist-trend').textContent = '기록이 2회 이상 쌓이면 처음과 최근의 평균 총액을 비교해 드려요.';
+    return;
+  }
+  const chip = (v) => `<strong class="${gainClass(v)}">${signedPct(v)}</strong>`;
+  const dir = t.changeKRW > 0 ? '늘고 있어요' : t.changeKRW < 0 ? '줄고 있어요' : '그대로예요';
+  const how = t.n >= 8 ? '' : ` (기록이 ${t.n}회라 ${t.n % 2 ? '가운데 1회를 빼고 ' : ''}반씩 나눠 비교)`;
+  const usdNote = t.changeUSD != null && Math.sign(t.changeUSD) !== Math.sign(t.changeKRW)
+    ? ` 달러로는 ${chip(t.changeUSD)}라 원화 변화에는 환율 영향이 섞여 있어요.`
+    : ` 달러로는 ${chip(t.changeUSD)}.`;
+  $('dist-trend').innerHTML =
+    `처음 ${t.k}회 평균 <strong>${krw(t.first.totalKRW)}</strong> → 최근 ${t.k}회 평균 <strong>${krw(t.last.totalKRW)}</strong>: `
+    + `받는 돈이 ${chip(t.changeKRW)} ${dir}${how}.${usdNote}`
+    + ` 그사이 보유 주수 ${chip(t.changeShares)}, 주당 분배금 ${chip(t.changePerShare)}.`;
 }
 
 /** 성적표의 "남은 주식 기준과 전체 기준" 카드와 핵심 지표의 판 돈 표시 */
@@ -570,8 +625,8 @@ function renderSells() {
 
 /** 수익률을 +12.34% / −5.67% 처럼 기호를 붙여 표시 (0 은 기호 없음) */
 const signedPct = (v) => (v == null ? '–' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v * 100).toFixed(2)}%`);
-/** 원금 대비 칸 색: 플러스 초록, 마이너스 빨강 (+, − 기호도 함께 붙음) */
-const gainClass = (v) => (v > 0 ? 'gain' : v < 0 ? 'loss' : '');
+/** 색 규칙은 앱 전체가 한국식: 수익·증가 빨강(.up), 손실·감소 파랑(.down). +, − 기호도 함께 붙임 */
+const gainClass = (v) => (v > 0 ? 'up' : v < 0 ? 'down' : '');
 
 /** 시뮬레이션 결과 표의 "원금 대비" 칸: 수익률과 손익 금액, 매도가 있으면 전체 기준도 작게 */
 function vsPrincipalCell(vs) {
@@ -584,6 +639,12 @@ function vsPrincipalCell(vs) {
     ? `<small class="overall">전체 기준 <span class="${gainClass(overall.profitKRW)}">${signedPct(overall.rate)}</span></small>`
     : '';
   return `<span class="vs-principal">${main}${all}</span>`;
+}
+
+/** 시뮬레이션 결과 표의 "52주 뒤 분배금 (1회)" 칸: 원화 총액, 달러, 그때 주가 대비 % */
+function distCell(d) {
+  const y = d.yieldOnPrice == null ? '' : ` · 주가 대비 ${(d.yieldOnPrice * 100).toFixed(2)}%`;
+  return `<span class="vs-principal"><strong>${krw(d.totalKRW)}</strong><small class="sub-note">${usd(d.totalUSD)}${y}</small></span>`;
 }
 
 function renderSim() {
@@ -603,7 +664,10 @@ function renderSim() {
   // 원금 비교 기준: 성적표의 "남은 주식 기준"과 같은 남은 원금 (매도가 있으면 판 돈 포함 전체 기준도)
   const report = computeReport(state.settings, state.records, state.market, state.sells);
   const basePrincipal = report.remainingPrincipalKRW;
-  for (const r of results) r.vs = compareToPrincipal(r.points.at(-1).valueKRW, report);
+  for (const r of results) {
+    r.vs = compareToPrincipal(r.points.at(-1).valueKRW, report);
+    r.dist = projectedDistribution(r.points.at(-1), state.sim.scenarios[r.key].dps);
+  }
 
   const isValue = chartMetric === 'valueKRW';
   const showBase = isValue && basePrincipal > 0;
@@ -641,6 +705,7 @@ function renderSim() {
       <td data-label="52주 뒤 주수">${sharesFmt(Math.round(last.shares * 10000) / 10000)}</td>
       <td data-label="52주 뒤 평가금액">${krw(last.valueKRW)}</td>
       <td data-label="원금 대비">${vsPrincipalCell(r.vs)}</td>
+      <td data-label="52주 뒤 분배금 (1회)">${distCell(r.dist)}</td>
       <td data-label="목표 도달">${reach}</td>
     </tr>`;
   }).join('');
@@ -657,7 +722,10 @@ document.querySelectorAll('[data-metric]').forEach((b) =>
 let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { if (!$('tab-sim').hidden) renderSim(); }, 150);
+  resizeTimer = setTimeout(() => {
+    if (!$('tab-sim').hidden) safe('시뮬레이션', renderSim);
+    if (!$('tab-report').hidden) safe('회차별 분배금', renderDistributions);
+  }, 150);
 });
 
 // ---------- 시세 자동 가져오기 ----------

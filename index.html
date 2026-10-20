@@ -149,6 +149,26 @@
       </div>
 
       <div class="card span-2">
+        <div class="chart-head">
+          <h2>회차별 분배금</h2>
+          <div class="seg" role="group" aria-label="총액 단위">
+            <button type="button" data-dist-unit="krw" aria-pressed="true">원화</button>
+            <button type="button" data-dist-unit="usd" aria-pressed="false">달러</button>
+          </div>
+        </div>
+        <p class="help" id="dist-empty">분배 기록을 추가하면 회차별로 받은 분배금 그래프가 나와요.</p>
+        <div id="dist-body" hidden>
+          <ul class="legend" id="dist-legend">
+            <li><span class="swatch bar"></span><span id="dist-legend-bar">받은 총액 (원, 세후)</span></li>
+            <li><span class="swatch line pline"></span>주당 분배금 ($)</li>
+          </ul>
+          <div class="chart" id="dist-chart"></div>
+          <p class="dist-trend" id="dist-trend"></p>
+          <p class="help">막대는 회차마다 실제로 받은 세후 분배금 총액이고, 아래 선은 그때 한 주당 분배금이에요. 총액 = 받은 시점 보유 주수 × 주당 분배금이라, 선이 내려가도 막대가 덜 줄면 늘어난 주수가 주당 분배금 감소를 메우고 있다는 뜻이에요. 원화 총액은 각 기록의 환율로 계산해요.</p>
+        </div>
+      </div>
+
+      <div class="card span-2">
         <h2>남은 주식 기준과 전체 기준</h2>
         <div class="fx-top">
           <div class="fx-stat">
@@ -330,7 +350,7 @@
         <h2>시나리오별 결과</h2>
         <div class="table-wrap">
           <table class="results">
-            <thead><tr><th>시나리오</th><th>52주 뒤 주수</th><th>52주 뒤 평가금액</th><th>원금 대비</th><th>목표 도달</th></tr></thead>
+            <thead><tr><th>시나리오</th><th>52주 뒤 주수</th><th>52주 뒤 평가금액</th><th>원금 대비</th><th>52주 뒤 분배금 (1회)</th><th>목표 도달</th></tr></thead>
             <tbody id="sim-results"></tbody>
           </table>
         </div>

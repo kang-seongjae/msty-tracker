@@ -14,8 +14,8 @@
   --up: #f04452;      /* 수익·상승 */
   --down: #3d8bfd;    /* 손실·하락 */
   --warn: #ffb534;    /* 예전 값 경고 */
-  --gain: #2fbf71;    /* 시뮬레이션 원금 대비 플러스 */
-  --loss: #f04452;    /* 시뮬레이션 원금 대비 마이너스 */
+  --dist-bar: #9085e9;  /* 회차별 분배금 막대 (보라: 수익·손실 색과 겹치지 않게) */
+  --dist-line: #c98500; /* 주당 분배금 선 (노랑) */
   --danger: #f04452;
   --grid: #2a2a32;
   --series-optimistic: #199e70;
@@ -286,13 +286,24 @@ td.actions button { min-height: 36px; padding: 6px 12px; font-size: 0.8rem; }
 .chart-svg .base-line { stroke: var(--text-2); stroke-width: 1.5; stroke-dasharray: 1.5 4; stroke-linecap: round; }
 .chart-svg .base-label { fill: var(--text-2); font-size: 11px; font-weight: 600; }
 
-/* 시뮬레이션 결과의 원금 대비: 플러스 초록, 마이너스 빨강 (+, − 기호도 함께 표시) */
-.gain { color: var(--gain); }
-.loss { color: var(--loss); }
+/* 회차별 분배금 그래프 */
+.chart-svg .dist-bar { fill: var(--dist-bar); }
+.chart-svg .dist-line { fill: none; stroke: var(--dist-line); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart-svg .dist-dot { fill: var(--dist-line); stroke: var(--surface); stroke-width: 2; }
+.chart-svg .dist-hover { fill: var(--text); opacity: 0.06; }
+.chart-svg .panel-label { fill: var(--text-2); font-size: 12px; font-weight: 600; }
+.legend .swatch.bar { width: 10px; height: 12px; border-radius: 3px 3px 0 0; background: var(--dist-bar); margin-right: 6px; }
+.legend .swatch.pline { background: var(--dist-line); }
+.dist-trend { margin: 14px 0 0; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface-2); font-size: 0.92rem; line-height: 1.6; }
+.dist-trend:empty { display: none; }
+.dist-trend strong { font-weight: 800; }
+
+/* 시뮬레이션 결과의 원금 대비: 앱 전체와 같은 .up(빨강) / .down(파랑) 을 쓰고 +, − 기호도 함께 표시 */
 .vs-principal { display: grid; justify-items: end; gap: 1px; line-height: 1.35; }
 .vs-principal strong { font-weight: 800; }
 .vs-principal small { font-size: 0.75rem; font-weight: 600; }
 .vs-principal .overall { color: var(--text-3); font-weight: 500; }
+.vs-principal .sub-note { color: var(--text-3); font-weight: 500; }
 .legend .swatch.dash { width: 16px; height: 0; border-top: 2px dashed var(--text-2); background: none; border-radius: 0; }
 .legend .swatch.dot { width: 16px; height: 0; border-top: 2px dotted var(--text-2); background: none; border-radius: 0; }
 .chart-svg .crosshair { stroke: var(--text-3); stroke-width: 1; }
