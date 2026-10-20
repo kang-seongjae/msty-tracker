@@ -590,9 +590,10 @@ function renderFx() {
 }
 
 // ---------- 통장 장 넘기기 ----------
-// 진짜 통장처럼 한 장에 LEDGER_ROWS 줄(맨 앞 "신규" 줄 포함)만 보여 주고 "앞 장 / 다음 장"으로 넘깁니다.
+// 진짜 통장처럼 한 장에 LEDGER_ROWS 줄("신규" 줄 포함)만 보여 주고 "앞 장 / 다음 장"으로 넘깁니다.
+// 최신 거래가 맨 위라서 1장이 최신 기록이 있는 장, 마지막 장 맨 아래가 "신규" 줄입니다.
 const LEDGER_ROWS = 8;
-let ledgerPage = null; // null 이면 마지막 장(최신 기록)
+let ledgerPage = null; // null 이면 1장(최신 기록)
 let ledgerFocus = null; // 방금 추가·정정한 줄 { kind, id } → 그 줄이 있는 장을 보여 줌
 
 function flipLedger(delta) {
@@ -607,8 +608,9 @@ $('ledger-prev').addEventListener('click', () => flipLedger(-1));
 $('ledger-next').addEventListener('click', () => flipLedger(1));
 
 /**
- * 분배 기록 탭의 통장: 분배금(입금)과 매도(출금)를 계산에 적용된 순서 그대로(날짜순, 같은 날은 분배 먼저)
- * 한 줄씩 찍습니다. 잔고는 그 줄을 적용한 직후의 보유 주수(computePortfolio 의 history / sellHistory)입니다.
+ * 분배 기록 탭의 통장: 분배금(입금)과 매도(출금)를 한 줄씩 찍습니다. 번호와 잔고는 계산에 적용된 순서
+ * (날짜순, 같은 날은 분배 먼저) 기준이고, 잔고는 그 줄을 적용한 직후의 보유 주수(computePortfolio 의
+ * history / sellHistory)입니다. 보여 주는 순서만 그 반대(최신 거래가 맨 위, "신규" 줄이 맨 아래)입니다.
  */
 function renderRecords() {
   const p = computePortfolio(state.settings, state.records, state.sells);
@@ -681,19 +683,24 @@ function renderRecords() {
     </tr>`);
     }
   });
-  // 한 장씩: 처음엔 마지막 장, 방금 추가·정정한 기록이 있으면 그 장
+  // 보여 주는 순서만 뒤집기: 최신 거래가 맨 위, 같은 날은 적용 순서의 반대, "신규" 줄은 맨 아래
+  rows.reverse();
+  keys.reverse();
+
+  // 한 장씩: 처음엔 1장(최신), 방금 추가·정정한 기록이 있으면 그 장
   const pageCount = Math.max(1, Math.ceil(rows.length / LEDGER_ROWS));
   if (ledgerFocus) {
     const at = keys.indexOf(`${ledgerFocus.kind}:${ledgerFocus.id}`);
     if (at >= 0) ledgerPage = Math.floor(at / LEDGER_ROWS);
     ledgerFocus = null;
   }
-  if (ledgerPage == null || ledgerPage > pageCount - 1) ledgerPage = pageCount - 1;
+  if (ledgerPage == null) ledgerPage = 0;
+  if (ledgerPage > pageCount - 1) ledgerPage = pageCount - 1;
   if (ledgerPage < 0) ledgerPage = 0;
   const isLast = ledgerPage === pageCount - 1;
   const pageRows = rows.slice(ledgerPage * LEDGER_ROWS, (ledgerPage + 1) * LEDGER_ROWS);
   if (isLast) {
-    // 마지막 장: 이하 여백, 남은 줄은 빈 괘선으로 채워 장마다 높이가 같게
+    // 마지막 장(가장 오래된 기록): 맨 아래 이하 여백, 남은 줄은 빈 괘선으로 채워 장마다 높이가 같게
     const blanks = LEDGER_ROWS - pageRows.length;
     pageRows.push('<tr class="line-end"><td colspan="7">*** 이하 여백 ***</td></tr>');
     for (let n = 0; n < blanks; n++) pageRows.push('<tr class="line-blank" aria-hidden="true"><td colspan="7"></td></tr>');

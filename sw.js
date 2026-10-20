@@ -14,7 +14,7 @@
 // - 시세 API(다른 주소) 요청은 건드리지 않습니다. 오프라인이면 실패하고 앱이 마지막 값을 경고 표시와 함께 보여 줍니다.
 // - 기록 데이터는 localStorage 에 있으므로 이 파일과 상관없이 그대로 남습니다.
 
-const BUILD = '04208e4813d262d3'; // npm run stamp 가 적어 넣는 값입니다. 직접 고치지 마세요.
+const BUILD = '78bd9635ae51d802'; // npm run stamp 가 적어 넣는 값입니다. 직접 고치지 마세요.
 const CACHE = `msty-shell-${BUILD}`;
 
 // 앱 화면을 여는 데 필요한 파일 (sw.js 위치 기준 상대 경로). 파일을 추가하면 여기에도 넣고 npm run stamp.

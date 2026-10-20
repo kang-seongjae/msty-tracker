@@ -264,7 +264,7 @@
       <p class="book-end span-2" aria-hidden="true">— 잔액 요약 끝 —</p>
     </section>
 
-    <!-- 분배 기록 = 펼친 통장. 분배금(입금)과 매도(출금)가 날짜순으로 한 줄씩 찍힘 -->
+    <!-- 분배 기록 = 펼친 통장. 분배금(입금)과 매도(출금)가 한 줄씩 찍힘. 최신 거래가 맨 위 -->
     <section id="tab-records" class="panel" role="tabpanel" hidden>
       <div class="card span-2 passbook">
         <div class="passbook-head">
@@ -299,7 +299,7 @@
           <span class="pager-page num" id="ledger-page" aria-live="polite"></span>
           <button type="button" id="ledger-next" aria-controls="records-table">다음 장 ▶</button>
         </nav>
-        <p class="help">분배금은 입금, 매도는 출금 칸에 찍히고, 잔고는 그 줄까지 반영한 보유 주수예요. 분배금으로 다시 산 주식은 도장으로 표시해요. 같은 날에 분배와 매도가 있으면 분배를 먼저 적어요.</p>
+        <p class="help">최근 거래가 맨 위에 있어요. 분배금은 입금, 매도는 출금 칸에 찍히고, 잔고는 그 거래까지 반영한 보유 주수예요. 분배금으로 다시 산 주식은 도장으로 표시해요. 같은 날에 분배와 매도가 있으면 분배를 먼저 반영하므로 매도가 위에 적혀요.</p>
       </div>
 
       <form class="card slip slip-in" id="record-form" novalidate>
