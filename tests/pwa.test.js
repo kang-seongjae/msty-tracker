@@ -38,7 +38,7 @@ test('매니페스트: 192·512 아이콘과 마스크용 아이콘이 실제 �
   const has = (size, purpose) => manifest.icons.some((i) => i.sizes === size && i.purpose === purpose);
   assert(has('192x192', 'any') && has('512x512', 'any'), '설치용 기본 아이콘 필요');
   assert(has('512x512', 'maskable'), '마스크용 아이콘 필요');
-  assertEqual(pngSize('icons/apple-touch-icon.png'), '180x180');
+  assertEqual(pngSize('icons/apple-touch-icon-v2.png'), '180x180');
 });
 
 test('index.html 이 매니페스트를 연결하고 서비스 워커를 쓰는 앱 코드를 불러옴', () => {

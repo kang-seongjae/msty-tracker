@@ -14,7 +14,7 @@
 // - 시세 API(다른 주소) 요청은 건드리지 않습니다. 오프라인이면 실패하고 앱이 마지막 값을 경고 표시와 함께 보여 줍니다.
 // - 기록 데이터는 localStorage 에 있으므로 이 파일과 상관없이 그대로 남습니다.
 
-const BUILD = '78bd9635ae51d802'; // npm run stamp 가 적어 넣는 값입니다. 직접 고치지 마세요.
+const BUILD = 'cfe26093ada4b46c'; // npm run stamp 가 적어 넣는 값입니다. 직접 고치지 마세요.
 const CACHE = `msty-shell-${BUILD}`;
 
 // 앱 화면을 여는 데 필요한 파일 (sw.js 위치 기준 상대 경로). 파일을 추가하면 여기에도 넣고 npm run stamp.
@@ -27,12 +27,12 @@ const SHELL_FILES = [
   'js/storage.js',
   'js/chart.js',
   'js/quotes.js',
-  'icons/icon.svg',
-  'icons/icon-192.png',
-  'icons/icon-512.png',
-  'icons/icon-maskable-192.png',
-  'icons/icon-maskable-512.png',
-  'icons/apple-touch-icon.png',
+  'icons/icon-v2.svg',
+  'icons/icon-v2-192.png',
+  'icons/icon-v2-512.png',
+  'icons/icon-v2-maskable-192.png',
+  'icons/icon-v2-maskable-512.png',
+  'icons/apple-touch-icon-v2.png',
   'fonts/passbook-title-extrabold.woff2',
   'fonts/passbook-print-regular.woff2',
   'fonts/passbook-print-bold.woff2',
