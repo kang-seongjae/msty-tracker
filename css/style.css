@@ -14,6 +14,8 @@
   --up: #f04452;      /* 수익·상승 */
   --down: #3d8bfd;    /* 손실·하락 */
   --warn: #ffb534;    /* 예전 값 경고 */
+  --gain: #2fbf71;    /* 시뮬레이션 원금 대비 플러스 */
+  --loss: #f04452;    /* 시뮬레이션 원금 대비 마이너스 */
   --danger: #f04452;
   --grid: #2a2a32;
   --series-optimistic: #199e70;
@@ -281,6 +283,18 @@ td.actions button { min-height: 36px; padding: 6px 12px; font-size: 0.8rem; }
 .chart-svg .tick { fill: var(--text-3); font-size: 11px; font-variant-numeric: tabular-nums; }
 .chart-svg .target-line { stroke: var(--text-2); stroke-width: 1.5; stroke-dasharray: 5 4; }
 .chart-svg .target-label { fill: var(--text-2); font-size: 11px; font-weight: 600; }
+.chart-svg .base-line { stroke: var(--text-2); stroke-width: 1.5; stroke-dasharray: 1.5 4; stroke-linecap: round; }
+.chart-svg .base-label { fill: var(--text-2); font-size: 11px; font-weight: 600; }
+
+/* 시뮬레이션 결과의 원금 대비: 플러스 초록, 마이너스 빨강 (+, − 기호도 함께 표시) */
+.gain { color: var(--gain); }
+.loss { color: var(--loss); }
+.vs-principal { display: grid; justify-items: end; gap: 1px; line-height: 1.35; }
+.vs-principal strong { font-weight: 800; }
+.vs-principal small { font-size: 0.75rem; font-weight: 600; }
+.vs-principal .overall { color: var(--text-3); font-weight: 500; }
+.legend .swatch.dash { width: 16px; height: 0; border-top: 2px dashed var(--text-2); background: none; border-radius: 0; }
+.legend .swatch.dot { width: 16px; height: 0; border-top: 2px dotted var(--text-2); background: none; border-radius: 0; }
 .chart-svg .crosshair { stroke: var(--text-3); stroke-width: 1; }
 .chart-svg .dot { stroke: var(--surface); stroke-width: 2; }
 .chart-tip {
@@ -303,6 +317,15 @@ td.actions button { min-height: 36px; padding: 6px 12px; font-size: 0.8rem; }
   table.records td:first-child::before { content: none; }
   table.records td.actions { grid-column: 1 / -1; justify-content: flex-end; margin-top: 6px; }
   table.records td.actions::before { content: none; }
+
+  /* 시뮬레이션 결과 표도 시나리오마다 한 덩어리로 */
+  table.results thead { display: none; }
+  table.results tr { display: grid; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+  table.results tr:last-child { border-bottom: 0; }
+  table.results th, table.results td { border: 0; padding: 0; text-align: left; white-space: normal; }
+  table.results td { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  table.results td::before { content: attr(data-label); color: var(--text-3); font-size: 0.8rem; flex: none; }
+  table.results td:last-child { text-align: right; }
 }
 
 @media (max-width: 419px) {

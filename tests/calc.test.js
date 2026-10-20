@@ -1,5 +1,5 @@
 import { test, assertEqual, assertClose, assert } from './mini-test.js';
-import { computePortfolio, computeReport, computeFxBreakdown, simulate, findTargetWeek, addWeeks, sortRecords } from '../js/calc.js';
+import { computePortfolio, computeReport, computeFxBreakdown, compareToPrincipal, simulate, findTargetWeek, addWeeks, sortRecords } from '../js/calc.js';
 import { normalizeState, defaultState } from '../js/storage.js';
 
 // 요청서의 예시: 처음 100주, 평균 단가 $15, 주당 $0.2씩 2주 분배
@@ -383,4 +383,56 @@ test('백업: 매도 기록도 내보내고 불러오며, 예전 백업(매도 �
   assertEqual(odd[0].price, 0);
   assertEqual(odd[0].fxRate, '');
   assert(odd[0].id.startsWith('s'), 'id 자동 생성');
+});
+
+// ---------- 시뮬레이션 결과를 원금과 비교 ----------
+
+test('원금 대비: 남은 원금 기준 수익률과 손익, 매도가 없으면 전체 기준은 없음', () => {
+  const r = computeReport(settings, records, market1400);
+  const c = compareToPrincipal(2_500_000, r);
+  assertEqual(c.remaining.principalKRW, 2_000_000);
+  assertEqual(c.remaining.profitKRW, 500_000);
+  assertEqual(c.remaining.rate, 0.25);
+  assertEqual(c.overall, null);
+  const loss = compareToPrincipal(1_500_000, r);
+  assertEqual(loss.remaining.profitKRW, -500_000);
+  assertEqual(loss.remaining.rate, -0.25);
+});
+
+test('원금 대비: 지금 평가금액을 넣으면 성적표의 남은 주식 기준·전체 기준과 똑같음', () => {
+  for (const sells of [[], [sell10], [{ ...sell10, fxRate: '' }]]) {
+    const r = computeReport(settings, records, market1400, sells);
+    const c = compareToPrincipal(r.valueKRW, r);
+    assertEqual(c.remaining.rate, r.remainingReturn);
+    assertEqual(c.remaining.profitKRW, r.remainingProfitKRW);
+    if (sells.length) {
+      assertEqual(c.overall.rate, r.overallReturn);
+      assertEqual(c.overall.profitKRW, r.profitKRW);
+    }
+  }
+});
+
+test('원금 대비(매도 있음): 전체 기준 = (52주 뒤 평가금액 + 지금까지 판 돈 − 처음 원금) ÷ 처음 원금', () => {
+  const r = computeReport(settings, records, market1400, [sell10]);
+  const c = compareToPrincipal(2_100_000, r);
+  assertClose(c.remaining.principalKRW, 2_000_000 * 93 / 103, 1e-6);
+  assertClose(c.remaining.rate, (2_100_000 - 2_000_000 * 93 / 103) / (2_000_000 * 93 / 103), 1e-12);
+  assertEqual(c.overall.principalKRW, 2_000_000);
+  assertClose(c.overall.profitKRW, 2_100_000 + 230_550 - 2_000_000, 1e-6);
+  assertClose(c.overall.rate, (2_100_000 + 230_550 - 2_000_000) / 2_000_000, 1e-12);
+});
+
+test('원금 대비: 분배금 0, 주가·환율 그대로인 시나리오는 52주 뒤에도 성적표 수익률과 같음', () => {
+  const r = computeReport(settings, records, market1400, [sell10]);
+  const pts = simulate({ shares: r.shares, cashUSD: r.cashUSD, price: 13, fxRate: 1400 }, { dps: 0, priceChangePct: 0, fxRate: '' });
+  const c = compareToPrincipal(pts.at(-1).valueKRW, r);
+  assertClose(c.remaining.rate, r.remainingReturn, 1e-12);
+  assertClose(c.overall.rate, r.overallReturn, 1e-12);
+});
+
+test('원금 대비: 남은 원금이 0이면(전부 팔았거나 원금 미입력) 수익률은 계산하지 않음', () => {
+  const allSold = computeReport(settings, records, market1400, [{ ...sell10, shares: 103 }]);
+  assertEqual(compareToPrincipal(0, allSold).remaining.rate, null);
+  assert(Number.isFinite(compareToPrincipal(0, allSold).overall.rate), '전체 기준은 계산됨');
+  assertEqual(compareToPrincipal(1000, computeReport({ ...settings, principalKRW: 0 }, records, market1400)).remaining.rate, null);
 });

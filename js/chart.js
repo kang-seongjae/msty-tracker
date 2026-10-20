@@ -18,7 +18,8 @@ function niceStep(range, count) {
   return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 5 ? 5 : 10) * mag;
 }
 
-export function renderLineChart(container, { series, target = null, formatY, formatTooltip, xLabel }) {
+// baseline: { value, label } — 원금처럼 기준이 되는 높이에 점선 가로줄 (target 의 목표선과 모양을 다르게 그림)
+export function renderLineChart(container, { series, target = null, baseline = null, formatY, formatTooltip, xLabel }) {
   container.innerHTML = '';
   const width = Math.max(container.clientWidth, 280);
   const height = width < 500 ? 240 : 300;
@@ -32,6 +33,8 @@ export function renderLineChart(container, { series, target = null, formatY, for
   let max = -Infinity;
   for (const s of series) for (const v of s.values) { if (v < min) min = v; if (v > max) max = v; }
   if (target != null && target > 0) { min = Math.min(min, target); max = Math.max(max, target); }
+  const hasBase = baseline != null && baseline.value > 0;
+  if (hasBase) { min = Math.min(min, baseline.value); max = Math.max(max, baseline.value); }
   if (min === max) { const pad = Math.abs(min) * 0.1 || 1; min -= pad; max += pad; }
   const step = niceStep(max - min, 4);
   min = Math.floor(min / step) * step;
@@ -61,6 +64,13 @@ export function renderLineChart(container, { series, target = null, formatY, for
     el('line', { x1: m.left, x2: m.left + w, y1: y(target), y2: y(target), class: 'target-line' }, svg);
     const t = el('text', { x: m.left + w - 4, y: y(target) - 6, 'text-anchor': 'end', class: 'target-label' }, svg);
     t.textContent = '목표';
+  }
+
+  // 원금선 (점선, 이름은 왼쪽에 붙여 오른쪽 '목표' 이름과 겹치지 않게)
+  if (hasBase) {
+    el('line', { x1: m.left, x2: m.left + w, y1: y(baseline.value), y2: y(baseline.value), class: 'base-line' }, svg);
+    const t = el('text', { x: m.left + 4, y: y(baseline.value) - 6, 'text-anchor': 'start', class: 'base-label' }, svg);
+    t.textContent = baseline.label;
   }
 
   // 시리즈 선

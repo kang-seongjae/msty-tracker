@@ -1,6 +1,6 @@
 // 화면 담당. 입력을 읽어 state 를 바꾸고, calc.js 로 계산한 결과를 화면에 그립니다.
 
-import { computePortfolio, computeReport, computeFxBreakdown, simulate, findTargetWeek, addWeeks } from './calc.js';
+import { computePortfolio, computeReport, computeFxBreakdown, compareToPrincipal, simulate, findTargetWeek, addWeeks } from './calc.js';
 import { loadState, saveState, exportState, importStateFile, defaultState, STORAGE_KEY, SCENARIO_KEYS } from './storage.js';
 import { renderLineChart } from './chart.js';
 import { refreshQuotes, loadApiConfig, saveApiConfig, loadQuoteCache, saveQuoteCache, PRICE_PROVIDERS } from './quotes.js';
@@ -568,6 +568,24 @@ function renderSells() {
   }).join('');
 }
 
+/** 수익률을 +12.34% / −5.67% 처럼 기호를 붙여 표시 (0 은 기호 없음) */
+const signedPct = (v) => (v == null ? '–' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v * 100).toFixed(2)}%`);
+/** 원금 대비 칸 색: 플러스 초록, 마이너스 빨강 (+, − 기호도 함께 붙음) */
+const gainClass = (v) => (v > 0 ? 'gain' : v < 0 ? 'loss' : '');
+
+/** 시뮬레이션 결과 표의 "원금 대비" 칸: 수익률과 손익 금액, 매도가 있으면 전체 기준도 작게 */
+function vsPrincipalCell(vs) {
+  const { remaining, overall } = vs;
+  const main = remaining.rate == null
+    ? '<strong>원금 필요</strong>'
+    : `<strong class="${gainClass(remaining.profitKRW)}">${signedPct(remaining.rate)}</strong>`
+      + `<small class="${gainClass(remaining.profitKRW)}">${signed(remaining.profitKRW, krw)}</small>`;
+  const all = overall && overall.rate != null
+    ? `<small class="overall">전체 기준 <span class="${gainClass(overall.profitKRW)}">${signedPct(overall.rate)}</span></small>`
+    : '';
+  return `<span class="vs-principal">${main}${all}</span>`;
+}
+
 function renderSim() {
   const p = computePortfolio(state.settings, state.records, state.sells);
   const start = { shares: p.shares, cashUSD: p.cashUSD, price: state.market.price, fxRate: state.market.fxRate };
@@ -582,18 +600,31 @@ function renderSim() {
     return { key, ...SCENARIO_META[key], points, targetWeek: findTargetWeek(points, state.sim.targetKRW) };
   });
 
+  // 원금 비교 기준: 성적표의 "남은 주식 기준"과 같은 남은 원금 (매도가 있으면 판 돈 포함 전체 기준도)
+  const report = computeReport(state.settings, state.records, state.market, state.sells);
+  const basePrincipal = report.remainingPrincipalKRW;
+  for (const r of results) r.vs = compareToPrincipal(r.points.at(-1).valueKRW, report);
+
   const isValue = chartMetric === 'valueKRW';
+  const showBase = isValue && basePrincipal > 0;
+  const showTarget = isValue && state.sim.targetKRW > 0;
   $('chart-title').textContent = isValue ? '52주 평가금액 (원)' : '52주 보유 주수';
-  $('legend').innerHTML = results.map((r) => `<li><span class="swatch line" style="background:${r.color}"></span>${r.label}</li>`).join('');
+  $('legend').innerHTML = results.map((r) => `<li><span class="swatch line" style="background:${r.color}"></span>${r.label}</li>`).join('')
+    + (showBase ? '<li><span class="swatch dot"></span>원금</li>' : '')
+    + (showTarget ? '<li><span class="swatch dash"></span>목표</li>' : '');
 
   renderLineChart($('chart'), {
     series: results.map((r) => ({ key: r.key, label: r.label, color: r.color, values: r.points.map((pt) => pt[chartMetric]) })),
     target: isValue ? state.sim.targetKRW : null,
+    baseline: showBase ? { value: basePrincipal, label: '원금' } : null,
     xLabel: '주',
     formatY: isValue ? shortKRW : (v) => `${+v.toFixed(1)}`,
     formatTooltip: (i, series) =>
       `<strong>${i}주 뒤 · ${addWeeks(today(), i)}</strong>` +
-      series.map((s) => `<div><span class="swatch line" style="background:${s.color}"></span>${s.label} ${isValue ? krw(s.values[i]) : sharesFmt(s.values[i])}</div>`).join(''),
+      series.map((s) => {
+        const vs = showBase ? ` (원금 대비 ${signedPct(compareToPrincipal(s.values[i], report).remaining.rate)})` : '';
+        return `<div><span class="swatch line" style="background:${s.color}"></span>${s.label} ${isValue ? krw(s.values[i]) + vs : sharesFmt(s.values[i])}</div>`;
+      }).join(''),
   });
 
   const target = state.sim.targetKRW;
@@ -607,9 +638,10 @@ function renderSim() {
     }
     return `<tr>
       <th scope="row"><span class="swatch line" style="background:${r.color}"></span>${r.label}</th>
-      <td>${sharesFmt(Math.round(last.shares * 10000) / 10000)}</td>
-      <td>${krw(last.valueKRW)}</td>
-      <td>${reach}</td>
+      <td data-label="52주 뒤 주수">${sharesFmt(Math.round(last.shares * 10000) / 10000)}</td>
+      <td data-label="52주 뒤 평가금액">${krw(last.valueKRW)}</td>
+      <td data-label="원금 대비">${vsPrincipalCell(r.vs)}</td>
+      <td data-label="목표 도달">${reach}</td>
     </tr>`;
   }).join('');
 }

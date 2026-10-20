@@ -353,6 +353,29 @@ export function computeFxBreakdown(settings, records, market, sells = []) {
 }
 
 /**
+ * 시뮬레이션 결과(예: 52주 뒤 평가금액)를 원금과 비교합니다. 다른 계산은 바꾸지 않고 따로 계산합니다.
+ *
+ * report 는 computeReport 결과(지금 기준)입니다.
+ * - 남은 주식 기준: (평가금액 − 남은 원금) ÷ 남은 원금      ← 성적표 "남은 주식 기준"과 같은 원금
+ * - 전체 기준(매도 기록이 있을 때만): (평가금액 + 지금까지 판 돈 − 처음 원금) ÷ 처음 원금
+ *   판 돈은 성적표와 같은 값(원화로 안 바꾼 판 돈은 현재 환율)을 씁니다.
+ * 지금 평가금액을 넣으면 성적표의 두 수익률과 똑같이 나옵니다.
+ */
+export function compareToPrincipal(valueKRW, report) {
+  const V = num(valueKRW);
+  const base = report.remainingPrincipalKRW;
+  const profitKRW = V - base;
+  const remaining = { principalKRW: base, profitKRW, rate: base > 0 ? profitKRW / base : null };
+  let overall = null;
+  if (report.hasSells) {
+    const P = report.principalKRW;
+    const overallProfit = V + report.soldProceedsKRW - P;
+    overall = { principalKRW: P, profitKRW: overallProfit, rate: P > 0 ? overallProfit / P : null };
+  }
+  return { remaining, overall };
+}
+
+/**
  * 한 시나리오를 weeks주 동안 매주 시뮬레이션합니다.
  *
  * start:    { shares, cashUSD, price, fxRate }  — 지금 상태
