@@ -156,9 +156,9 @@ export function renderDistributionChart(container, { items, labels, formatTotalT
     const hgt = Math.max(0, barBase - yBar(d.total));
     if (hgt <= 0) return;
     const x0 = cx(i) - bw / 2;
-    const r = Math.min(4, bw / 2, hgt);
+    const r = Math.min(1, bw / 2, hgt); // 통장 인쇄처럼 각진 막대
     const top = barBase - hgt;
-    // 위쪽 모서리만 둥글게, 아래는 바닥선에 붙임
+    // 위쪽 모서리만 아주 살짝 다듬고, 아래는 바닥선에 붙임
     const dPath = `M${x0},${barBase}V${top + r}Q${x0},${top} ${x0 + r},${top}H${x0 + bw - r}Q${x0 + bw},${top} ${x0 + bw},${top + r}V${barBase}Z`;
     el('path', { d: dPath, class: 'dist-bar' }, svg);
   });

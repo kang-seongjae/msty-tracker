@@ -114,6 +114,7 @@ function buildScenarioInputs() {
     const sc = state.sim.scenarios[key];
     const box = document.createElement('fieldset');
     box.className = 'scenario';
+    box.style.setProperty('--sc', meta.color); // 전표 윗줄을 시나리오 색으로
     box.innerHTML = `
       <legend><span class="swatch" style="background:${meta.color}"></span>${meta.label}</legend>
       <label>주당 주간 분배금 ($)<input type="number" inputmode="decimal" step="any" min="0" data-f="dps"></label>
@@ -228,6 +229,8 @@ $('f-cancel').addEventListener('click', resetForm);
 $('records-body').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-act]');
   if (!btn) return;
+  // 통장에는 매도(출금) 줄도 함께 찍혀 있으므로, 그 줄의 버튼은 매도 기록 쪽에서 처리
+  if (btn.dataset.kind === 'sell') { onSellAction(btn); return; }
   const id = btn.dataset.id;
   const rec = state.records.find((r) => r.id === id);
   if (!rec) return;
@@ -332,7 +335,10 @@ $('sf-cancel').addEventListener('click', resetSellForm);
 
 $('sells-body').addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-act]');
-  if (!btn) return;
+  if (btn) onSellAction(btn);
+});
+
+function onSellAction(btn) {
   const id = btn.dataset.id;
   const s = state.sells.find((x) => x.id === id);
   if (!s) return;
@@ -355,7 +361,7 @@ $('sells-body').addEventListener('click', (e) => {
     updateSellHint();
     sellForm.scrollIntoView({ behavior: 'smooth' });
   }
-});
+}
 
 // ---------- 백업 ----------
 $('btn-export').addEventListener('click', () => {
@@ -576,24 +582,85 @@ function renderFx() {
   set('fx-part-total', signed(b.display.totalKRW, krw), b.display.totalKRW);
 }
 
+/**
+ * 분배 기록 탭의 통장: 분배금(입금)과 매도(출금)를 계산에 적용된 순서 그대로(날짜순, 같은 날은 분배 먼저)
+ * 한 줄씩 찍습니다. 잔고는 그 줄을 적용한 직후의 보유 주수(computePortfolio 의 history / sellHistory)입니다.
+ */
 function renderRecords() {
   const p = computePortfolio(state.settings, state.records, state.sells);
-  const byId = new Map(p.history.map((h) => [h.id, h]));
-  const has = state.records.length > 0;
+  const recById = new Map(state.records.map((r) => [r.id, r]));
+  const sellById = new Map(state.sells.map((s) => [s.id, s]));
+  const has = state.records.length > 0 || state.sells.length > 0;
   $('records-empty').hidden = has;
   $('records-table').hidden = !has;
-  // 최신 기록이 위에 오도록
-  $('records-body').innerHTML = [...state.records].reverse().map((r) => {
-    const h = byId.get(r.id);
-    return `<tr>
-      <td>${r.date}</td>
-      <td data-label="분배금">${usd(r.dividendUSD)}</td>
-      <td data-label="매수">${sharesFmt(r.sharesBought)} × ${usd(r.price)}</td>
-      <td data-label="보유 주수">${sharesFmt(h.shares)}</td>
-      <td data-label="평균 단가">${usd(h.avgCost, 4)}</td>
-      <td class="actions"><button type="button" data-act="edit" data-id="${r.id}">수정</button><button type="button" class="danger" data-act="del" data-id="${r.id}">삭제</button></td>
-    </tr>`;
-  }).join('');
+  if (!has) { $('records-body').innerHTML = ''; $('ledger-range').textContent = ''; return; }
+
+  // 계산이 적용한 순서: history 와 sellHistory 는 각각 날짜순이고, 같은 날은 분배가 먼저
+  const lines = [];
+  let i = 0;
+  let j = 0;
+  while (i < p.history.length || j < p.sellHistory.length) {
+    const takeRec = j >= p.sellHistory.length || (i < p.history.length && p.history[i].date <= p.sellHistory[j].date);
+    if (takeRec) lines.push({ kind: 'div', h: p.history[i++] });
+    else lines.push({ kind: 'sell', h: p.sellHistory[j++] });
+  }
+
+  const act = (kind, id, date) => {
+    const what = kind === 'sell' ? '매도 기록' : '분배 기록';
+    return `<td class="actions c-act"><button type="button" data-act="edit" data-kind="${kind}" data-id="${escapeHTML(id)}" aria-label="${escapeHTML(date)} ${what} 정정(수정)">정정</button>`
+      + `<button type="button" class="danger" data-act="del" data-kind="${kind}" data-id="${escapeHTML(id)}" aria-label="${escapeHTML(date)} ${what} 삭제">삭제</button></td>`;
+  };
+  const no = (n) => String(n).padStart(2, '0');
+
+  // 첫 줄: 통장을 연 날의 잔고(처음 보유 주수)
+  const rows = [`<tr class="line-open">
+      <td class="c-no">${no(0)}</td>
+      <td class="c-date">신규</td>
+      <td class="c-memo"><span class="memo-text"><span class="memo-main">처음 보유</span><span class="memo-sub">평단 ${usd(p.initialAvgCost, 4)}</span></span></td>
+      <td class="c-in"></td>
+      <td class="c-out"></td>
+      <td class="c-bal">${sharesFmt(p.initialShares)}</td>
+      <td class="c-act"></td>
+    </tr>`];
+
+  lines.forEach((line, k) => {
+    const h = line.h;
+    if (line.kind === 'div') {
+      const r = recById.get(h.id);
+      const stamp = r.sharesBought > 0
+        ? `<span class="stamp" role="img" aria-label="재매수 ${sharesFmt(r.sharesBought)}, 매수 가격 ${usd(r.price)}"><span class="stamp-top">재매수</span><span class="stamp-qty">${sharesFmt(r.sharesBought)}</span><span class="stamp-at">@ ${usd(r.price)}</span></span>`
+        : `<span class="no-stamp">재매수 ${sharesFmt(r.sharesBought)} · ${usd(r.price)}</span>`;
+      rows.push(`<tr class="line-div">
+      <td class="c-no">${no(k + 1)}</td>
+      <td class="c-date">${escapeHTML(r.date)}</td>
+      <td class="c-memo"><span class="memo-text"><span class="memo-main">분배금</span><span class="memo-sub">평단 ${usd(h.avgCost, 4)}</span></span>${stamp}</td>
+      <td class="c-in" data-label="입금">${usd(r.dividendUSD)}</td>
+      <td class="c-out" data-label="출금"></td>
+      <td class="c-bal" data-label="잔고">${sharesFmt(h.shares)}</td>
+      ${act('div', r.id, r.date)}
+    </tr>`);
+    } else {
+      const s = sellById.get(h.id);
+      const fee = s.feeUSD > 0 ? `<span class="memo-sub">수수료 ${usd(s.feeUSD)}</span>` : '';
+      const fx = s.fxRate ? `<span class="memo-sub">${s.fxRate.toLocaleString('ko-KR')}원에 환전</span>` : '';
+      const warn = h.oversold ? `<span class="warn-text">⚠ 그날 보유 ${sharesFmt(h.sharesBefore)}보다 많아요</span>` : '';
+      rows.push(`<tr class="line-sell">
+      <td class="c-no">${no(k + 1)}</td>
+      <td class="c-date">${escapeHTML(s.date)}</td>
+      <td class="c-memo"><span class="memo-text"><span class="memo-main">매도</span>${fee}${fx}${warn}</span></td>
+      <td class="c-in" data-label="입금"></td>
+      <td class="c-out" data-label="출금"><span class="out-qty">${sharesFmt(s.shares)}</span><span class="out-at">× ${usd(s.price)}</span></td>
+      <td class="c-bal" data-label="잔고">${sharesFmt(h.sharesAfter)}</td>
+      ${act('sell', s.id, s.date)}
+    </tr>`);
+    }
+  });
+  rows.push('<tr class="line-end"><td colspan="7">*** 이하 여백 ***</td></tr>');
+  $('records-body').innerHTML = rows.join('');
+
+  const first = lines[0]?.h.date;
+  const last = lines.at(-1)?.h.date;
+  $('ledger-range').textContent = `${first} ~ ${last} · 분배 ${p.history.length}회 · 매도 ${p.sellHistory.length}회`;
 }
 
 function renderSells() {
@@ -612,13 +679,13 @@ function renderSells() {
     const krwLabel = krwRealized == null ? '' : `<small>${signed(krwRealized, krw)}${h.fxRate ? '' : ' (현재 환율)'}</small>`;
     const fxNote = s.fxRate ? `<br><small class="muted">${s.fxRate.toLocaleString('ko-KR')}원에 환전</small>` : '';
     const warn = h.oversold ? `<br><span class="warn-text">⚠ 그날 보유 ${sharesFmt(h.sharesBefore)}보다 많아요</span>` : '';
+    // 정정·삭제 버튼은 통장 거래내역의 출금 줄에 있습니다.
     return `<tr>
       <td>${escapeHTML(s.date)}</td>
       <td data-label="매도">${sharesFmt(s.shares)} × ${usd(s.price)}${fxNote}${warn}</td>
       <td data-label="수수료">${usd(s.feeUSD)}</td>
       <td data-label="실현 손익"><span class="realized"><span class="${toneClass(h.realizedUSD)}">${signed(h.realizedUSD, (v) => usd(v))}</span>${krwLabel}</span></td>
       <td data-label="남은 주수">${sharesFmt(h.sharesAfter)}</td>
-      <td class="actions"><button type="button" data-act="edit" data-id="${escapeHTML(s.id)}">수정</button><button type="button" class="danger" data-act="del" data-id="${escapeHTML(s.id)}">삭제</button></td>
     </tr>`;
   }).join('');
 }
