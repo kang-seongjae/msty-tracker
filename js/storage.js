@@ -8,6 +8,7 @@ export function defaultState() {
     version: 1,
     settings: { initialShares: 0, initialAvgCost: 0, principalKRW: 0, initialUSD: 0 },
     records: [],
+    sells: [], // 매도 기록 { id, date, shares, price, feeUSD, fxRate('' = 원화로 안 바꿈) }
     market: { price: 0, fxRate: 0 },
     sim: {
       targetKRW: 0,
@@ -39,6 +40,7 @@ export function normalizeState(raw) {
   const m = raw.market ?? {};
   const sim = raw.sim ?? {};
   const records = Array.isArray(raw.records) ? raw.records : [];
+  const sells = Array.isArray(raw.sells) ? raw.sells : []; // 예전 데이터·백업에는 없음
 
   return {
     version: 1,
@@ -57,6 +59,16 @@ export function normalizeState(raw) {
         sharesBought: n(r.sharesBought),
         price: n(r.price),
         fxRate: n(r.fxRate),
+      })),
+    sells: sells
+      .filter((r) => r && typeof r.date === 'string')
+      .map((r, i) => ({
+        id: typeof r.id === 'string' && r.id ? r.id : `s${Date.now().toString(36)}${i}`,
+        date: r.date,
+        shares: n(r.shares),
+        price: n(r.price),
+        feeUSD: n(r.feeUSD),
+        fxRate: r.fxRate === '' || r.fxRate == null || !(n(r.fxRate) > 0) ? '' : n(r.fxRate),
       })),
     market: { price: n(m.price), fxRate: n(m.fxRate) },
     sim: {

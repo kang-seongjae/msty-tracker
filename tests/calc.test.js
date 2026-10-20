@@ -246,3 +246,141 @@ test('넣은 달러나 원금이 없으면 달러 기준 계산은 하지 않음
   assert(computeFxBreakdown(usdSettings, records, { price: 0, fxRate: 0 }).ready, '시세 없어도 계산은 됨');
   assertEqual(computeFxBreakdown({ ...usdSettings, principalKRW: 0 }, records, market1400).ready, false);
 });
+
+// ---------- 매도 ----------
+// 예시 103주(매수원가 $1,540, 남은 현금 $0.2)에서 2026-01-16 에 10주를 $16 에 팔고 수수료 $1, 1,450원에 원화로 바꿈
+const sell10 = { id: 's1', date: '2026-01-16', shares: 10, price: 16, feeUSD: 1, fxRate: 1450 };
+
+test('매도: 보유 주수가 줄고, 남은 주식의 평균 단가는 그대로', () => {
+  const before = computePortfolio(settings, records);
+  const p = computePortfolio(settings, records, [sell10]);
+  assertEqual(p.shares, 93);
+  assertClose(p.avgCost, before.avgCost, 1e-12);
+  assertClose(p.costUSD, 1540 - 10 * (1540 / 103), 1e-9);
+  assertClose(p.cashUSD, before.cashUSD, 1e-12); // 판 돈은 재매수용 현금에 섞지 않음
+});
+
+test('매도: 원금은 판 주수 × 평균 원금만큼 빠짐 (원화 원금·넣은 달러 모두)', () => {
+  const p = computePortfolio(usdSettings, records, [sell10]);
+  const h = p.sellHistory[0];
+  assertClose(h.principalPerShareKRW, 2_000_000 / 103, 1e-9);
+  assertClose(h.principalRemovedKRW, 10 * (2_000_000 / 103), 1e-6);
+  assertClose(p.remainingPrincipalKRW, 2_000_000 * 93 / 103, 1e-6);
+  assertClose(p.remainingInitialUSD, 1600 * 93 / 103, 1e-9);
+});
+
+test('매도: 실현 손익 달러 = 순매도금액 − 판 주수 × 평균 단가, 원화 = 순매도금액 × 환율 − 빠진 원금', () => {
+  const h = computePortfolio(settings, records, [sell10]).sellHistory[0];
+  assertClose(h.netUSD, 159, 1e-12); // 10 × 16 − 1
+  assertClose(h.realizedUSD, 159 - 10 * (1540 / 103), 1e-9); // +$9.49
+  assertClose(h.proceedsKRW, 159 * 1450, 1e-6); // 230,550원
+  assertClose(h.realizedKRW, 159 * 1450 - 10 * (2_000_000 / 103), 1e-6); // +36,375원
+  assertEqual(h.oversold, false);
+});
+
+test('성적표: 남은 주식 기준과 전체 기준(판 돈 포함) 수익률, 판 돈 합계', () => {
+  const r = computeReport(settings, records, market1400, [sell10]);
+  const valueKRW = (93 * 13 + 0.2) * 1400; // 1,692,880원
+  const remaining = 2_000_000 * 93 / 103;
+  assertClose(r.valueKRW, valueKRW, 1e-6);
+  assertClose(r.soldProceedsKRW, 230_550, 1e-6);
+  assertClose(r.soldProceedsUSD, 159, 1e-12);
+  assertEqual(r.soldShares, 10);
+  assertClose(r.profitKRW, valueKRW + 230_550 - 2_000_000, 1e-6); // −76,570원
+  assertClose(r.overallReturn, (valueKRW + 230_550 - 2_000_000) / 2_000_000, 1e-12);
+  assertEqual(r.totalReturn, r.overallReturn);
+  assertClose(r.remainingReturn, (valueKRW - remaining) / remaining, 1e-12);
+  // 전체 손익 = 남은 주식 손익 + 실현 손익(원화)
+  assertClose(r.profitKRW, r.remainingProfitKRW + r.realizedKRW, 1e-6);
+  // 증권사 기준 매수원금도 판 비율만큼 줄어듦
+  assertClose(r.brokerCostKRW, (2_000_000 + 56_260) * 93 / 103, 1e-6);
+});
+
+test('원화로 바꾸지 않은 매도(환율 비움)는 판 돈과 실현 손익을 현재 환율로 계산', () => {
+  const r = computeReport(settings, records, market1400, [{ ...sell10, fxRate: '' }]);
+  const out = 10 * (2_000_000 / 103);
+  assertClose(r.soldProceedsKRW, 159 * 1400, 1e-6);
+  assertClose(r.realizedKRW, 159 * 1400 - out, 1e-6);
+  assertEqual(r.sellHistory[0].fxRate, null);
+  assertEqual(r.sellHistory[0].realizedKRW, null);
+  assertClose(r.profitKRW, r.remainingProfitKRW + r.realizedKRW, 1e-6);
+});
+
+test('매도 뒤 분배·재매수는 줄어든 주수에서 이어지고, 같은 날짜면 분배를 먼저 적용', () => {
+  const later = { id: 'c', date: '2026-01-23', dividendUSD: 93 * 0.2, sharesBought: 1, price: 13.5, fxRate: 1400 };
+  const p = computePortfolio(settings, [...records, later], [sell10]);
+  assertEqual(p.shares, 94);
+  assertClose(p.costUSD, 1540 - 10 * (1540 / 103) + 13.5, 1e-9);
+  // 2026-01-09 분배(2주 재매수)와 같은 날 판 경우: 103주에서 판 것으로 계산
+  const same = computePortfolio(settings, records, [{ ...sell10, date: '2026-01-09' }]);
+  assertEqual(same.sellHistory[0].sharesBefore, 103);
+});
+
+test('보유 주수보다 많이 판 기록은 보유 주수까지만 계산하고 표시해 둠', () => {
+  const p = computePortfolio(settings, records, [{ ...sell10, shares: 200 }]);
+  const h = p.sellHistory[0];
+  assertEqual(h.sharesSold, 103);
+  assertEqual(h.oversold, true);
+  assertEqual(p.shares, 0);
+  assertEqual(p.remainingPrincipalKRW, 0);
+  const r = computeReport(settings, records, market1400, [{ ...sell10, shares: 200 }]);
+  assertEqual(r.remainingReturn, null); // 남은 원금이 없으면 남은 주식 기준은 계산하지 않음
+  assert(Number.isFinite(r.overallReturn), '전체 기준은 계산됨');
+});
+
+test('달러 기준·환율 효과는 남은 주식 기준으로 계산하고, 평균 환전 환율은 그대로', () => {
+  const b = computeFxBreakdown(usdSettings, records, market1400, [sell10]);
+  const r = computeReport(usdSettings, records, market1400, [sell10]);
+  assert(b.ready && b.hasSells, '계산 가능');
+  assertClose(b.avgFxRate, 1250, 1e-9);
+  assertClose(b.initialUSD, 1600 * 93 / 103, 1e-9);
+  assertClose(b.profitKRW, r.remainingProfitKRW, 1e-9);
+  assertClose(b.usdProfitKRW + b.fxEffectKRW, b.profitKRW, 1e-6);
+  assertEqual(b.display.usdProfitKRW + b.display.fxEffectKRW, b.display.totalKRW);
+});
+
+test('여러 무작위 매도에서도 평균 단가 유지, 전체 손익 = 남은 주식 손익 + 실현 손익', () => {
+  let seed = 777;
+  const rand = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  for (let i = 0; i < 300; i++) {
+    const s = { initialShares: 50 + Math.floor(rand() * 2000), initialAvgCost: 5 + rand() * 30, principalKRW: Math.round(1e6 + rand() * 9e7), initialUSD: 0 };
+    s.initialUSD = s.principalKRW / (1150 + rand() * 350);
+    const recs = Array.from({ length: Math.floor(rand() * 12) }, (_, k) => ({
+      id: `x${k}`, date: `2026-${String(1 + Math.floor(rand() * 12)).padStart(2, '0')}-10`,
+      dividendUSD: rand() * 300, sharesBought: Math.floor(rand() * 20), price: 5 + rand() * 30, fxRate: 1200 + rand() * 300,
+    }));
+    const sls = Array.from({ length: 1 + Math.floor(rand() * 4) }, (_, k) => ({
+      id: `s${k}`, date: `2026-${String(1 + Math.floor(rand() * 12)).padStart(2, '0')}-15`,
+      shares: Math.floor(rand() * 300), price: 3 + rand() * 40, feeUSD: rand() * 5, fxRate: rand() < 0.5 ? '' : 1200 + rand() * 300,
+    }));
+    const m = { price: 1 + rand() * 40, fxRate: 1000 + rand() * 600 };
+    const r = computeReport(s, recs, m, sls);
+    const tol = Math.max(1e-6, Math.abs(s.principalKRW) * 1e-12);
+    assertClose(r.profitKRW, r.remainingProfitKRW + r.realizedKRW, tol, `경우 ${i}: 손익 합`);
+    assert(r.shares >= 0 && r.remainingPrincipalKRW >= -1e-6, `경우 ${i}: 음수 없음`);
+    for (const h of r.sellHistory) {
+      // 매도 직후 남은 주식의 평균 단가 = 매도 직전 평균 단가
+      if (h.sharesAfter > 0) assertClose(h.avgCostAfter, h.avgCost, Math.max(1e-9, h.avgCost * 1e-9), `경우 ${i}: 평균 단가`);
+    }
+    const b = computeFxBreakdown(s, recs, m, sls);
+    if (b.ready) assertEqual(b.display.usdProfitKRW + b.display.fxEffectKRW, b.display.totalKRW, `경우 ${i}: 표시 합`);
+  }
+});
+
+test('백업: 매도 기록도 내보내고 불러오며, 예전 백업(매도 없음)은 빈 목록으로 읽음', () => {
+  const s = defaultState();
+  s.settings = { ...usdSettings };
+  s.records = records.map((r) => ({ ...r }));
+  s.sells = [{ ...sell10 }, { id: 's2', date: '2026-02-01', shares: 3, price: 15.5, feeUSD: 0, fxRate: '' }];
+  const back = normalizeState(JSON.parse(JSON.stringify(s)));
+  assertEqual(JSON.stringify(back.sells), JSON.stringify(s.sells));
+  assertEqual(JSON.stringify(back), JSON.stringify(s));
+  assertEqual(JSON.stringify(normalizeState({ settings: {}, records: [] }).sells), '[]');
+  // 잘못된 값은 안전하게 정리
+  const odd = normalizeState({ sells: [{ date: '2026-03-01', shares: '5', price: 'x', fxRate: 0 }, { shares: 1 }, null] }).sells;
+  assertEqual(odd.length, 1);
+  assertEqual(odd[0].shares, 5);
+  assertEqual(odd[0].price, 0);
+  assertEqual(odd[0].fxRate, '');
+  assert(odd[0].id.startsWith('s'), 'id 자동 생성');
+});

@@ -49,11 +49,12 @@
       <!-- 가장 중요한 숫자: 총수익률, 증권사 기준 수익률, 보유 주수 -->
       <section class="card hero span-2" aria-label="핵심 지표">
         <div class="hero-main">
-          <p class="eyebrow">총수익률 <span class="eyebrow-note">분배금 포함</span>
+          <p class="eyebrow">총수익률 <span class="eyebrow-note" id="hero-basis">분배금 포함</span>
             <span class="stale-badge" id="hero-stale" hidden title="시세를 새로 못 가져와서 예전 주가·환율로 계산했어요">⚠ 예전 시세</span></p>
           <p class="hero-big num" id="r-return">–</p>
           <p class="hero-sub num" id="r-profit"></p>
           <p class="hero-value">평가금액 <strong class="num" id="hero-value">–</strong></p>
+          <p class="hero-value" id="hero-remaining-line" hidden>남은 주식 기준 <strong class="num" id="hero-remaining">–</strong></p>
         </div>
         <div class="hero-stat">
           <p class="eyebrow">증권사 기준 수익률</p>
@@ -148,7 +149,31 @@
       </div>
 
       <div class="card span-2">
-        <h2>달러 기준 수익률과 환율 효과</h2>
+        <h2>남은 주식 기준과 전체 기준</h2>
+        <div class="fx-top">
+          <div class="fx-stat">
+            <p class="eyebrow">남은 주식 기준</p>
+            <p class="stat-big num" id="r-remaining-return">–</p>
+            <p class="hero-sub num" id="r-remaining-profit"></p>
+          </div>
+          <div class="fx-stat">
+            <p class="eyebrow">전체 기준 <span class="eyebrow-note">판 돈 포함</span></p>
+            <p class="stat-big num" id="r-overall-return">–</p>
+            <p class="hero-sub num" id="r-overall-profit"></p>
+          </div>
+        </div>
+        <dl class="kv kv-gap">
+          <dt>지금까지 판 돈 합계</dt><dd id="r-sold-proceeds"></dd>
+          <dt>판 주수</dt><dd id="r-sold-shares"></dd>
+          <dt>실현 손익 (달러, 평균 단가 기준)</dt><dd id="r-realized-usd"></dd>
+          <dt>실현 손익 (원화, 원금 기준)</dt><dd id="r-realized-krw"></dd>
+          <dt>남은 원금</dt><dd id="r-remaining-principal"></dd>
+        </dl>
+        <p class="help" id="sell-note"></p>
+      </div>
+
+      <div class="card span-2">
+        <h2>달러 기준 수익률과 환율 효과 <small class="title-note" id="fx-basis"></small></h2>
         <p class="help fx-empty" id="fx-empty">설정에서 "처음 환전해서 넣은 달러"를 입력하면 달러 기준 수익률과 환율 효과를 나눠서 보여 줘요.</p>
         <div id="fx-body" hidden>
           <div class="fx-top">
@@ -239,6 +264,38 @@
               </tr>
             </thead>
             <tbody id="records-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <form class="card" id="sell-form" novalidate>
+        <h2 id="sell-form-title">매도 기록 추가</h2>
+        <div class="grid2">
+          <label>날짜<input type="date" id="sf-date" required></label>
+          <label>판 주수<input type="number" inputmode="decimal" step="any" min="0" id="sf-shares" required></label>
+          <label>매도 가격 ($)<input type="number" inputmode="decimal" step="any" min="0" id="sf-price" required></label>
+          <label>수수료 ($)<input type="number" inputmode="decimal" step="any" min="0" id="sf-fee" placeholder="0"></label>
+          <label>원화로 바꾼 환율 (원/$)<input type="number" inputmode="decimal" step="any" min="0" id="sf-fx" placeholder="안 바꿨으면 비움"></label>
+        </div>
+        <p class="help" id="sf-hint"></p>
+        <p class="error" id="sf-error" role="alert"></p>
+        <div class="row">
+          <button type="submit" class="primary" id="sf-submit">매도 기록 추가</button>
+          <button type="button" id="sf-cancel" hidden>수정 취소</button>
+        </div>
+      </form>
+
+      <div class="card">
+        <h2>매도 목록</h2>
+        <p class="help" id="sells-empty">아직 매도 기록이 없어요.</p>
+        <div class="table-wrap">
+          <table class="records" id="sells-table" hidden>
+            <thead>
+              <tr>
+                <th>날짜</th><th>매도</th><th>수수료</th><th>실현 손익</th><th>남은 주수</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="sells-body"></tbody>
           </table>
         </div>
       </div>

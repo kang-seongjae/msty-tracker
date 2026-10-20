@@ -222,6 +222,13 @@ button:focus-visible, .button:focus-within, .tabs button:focus-visible { outline
 .fx-total { border-bottom: 0; }
 .fx-total .fx-name { color: var(--text-2); }
 
+.kv-gap { margin-top: 18px; }
+.title-note { color: var(--text-3); font-size: 0.8rem; font-weight: 500; margin-left: 6px; }
+.realized { display: grid; justify-items: end; gap: 0; }
+.realized small { color: var(--text-3); font-size: 0.72rem; font-weight: 500; }
+.warn-text { color: var(--warn); font-size: 0.75rem; font-weight: 600; }
+.muted { color: var(--text-3); font-size: 0.75rem; }
+
 /* 참고 시세 */
 .ref-list { display: grid; }
 .ref-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 12px 0; }

@@ -186,7 +186,7 @@ function updateHint() {
   if (!(div > 0 && price > 0)) { hint.textContent = ''; return; }
   // 수정 중이면 그 기록을 뺀 나머지로 남은 현금을 계산
   const others = state.records.filter((r) => r.id !== editingId);
-  const cash = computePortfolio(state.settings, others).cashUSD;
+  const cash = computePortfolio(state.settings, others, state.sells).cashUSD;
   const available = Math.max(cash, 0) + div;
   const maxShares = Math.floor(available / price + 1e-9);
   let text = `남은 현금 ${usd(Math.max(cash, 0))} 포함 ${usd(available)}로 최대 ${maxShares}주 살 수 있어요.`;
@@ -251,6 +251,111 @@ $('records-body').addEventListener('click', (e) => {
   }
 });
 
+// ---------- 매도 기록 폼 ----------
+const sellForm = $('sell-form');
+const sf = { date: $('sf-date'), shares: $('sf-shares'), price: $('sf-price'), fee: $('sf-fee'), fx: $('sf-fx') };
+let editingSellId = null;
+
+function readSellForm() {
+  return {
+    date: sf.date.value,
+    shares: Number(sf.shares.value),
+    price: Number(sf.price.value),
+    feeUSD: sf.fee.value === '' ? 0 : Number(sf.fee.value),
+    fxRate: sf.fx.value === '' ? '' : Number(sf.fx.value),
+  };
+}
+
+function resetSellForm() {
+  editingSellId = null;
+  sellForm.reset();
+  sf.date.value = today();
+  $('sell-form-title').textContent = '매도 기록 추가';
+  $('sf-submit').textContent = '매도 기록 추가';
+  $('sf-cancel').hidden = true;
+  $('sf-error').textContent = '';
+  updateSellHint();
+}
+
+/** 이 매도를 넣었을 때의 계산 결과 (수정 중이면 원래 기록 대신) */
+function previewSell(candidate) {
+  const id = editingSellId ?? '__new__';
+  const sells = [...state.sells.filter((s) => s.id !== id), { ...candidate, id }];
+  const r = computeReport(state.settings, state.records, state.market, sells);
+  return { r, h: r.sellHistory.find((x) => x.id === id) };
+}
+
+function updateSellHint() {
+  const c = readSellForm();
+  const hint = $('sf-hint');
+  if (!c.date) { hint.textContent = ''; return; }
+  const { h } = previewSell({ ...c, shares: c.shares > 0 ? c.shares : 0, price: c.price > 0 ? c.price : 0, feeUSD: c.feeUSD > 0 ? c.feeUSD : 0 });
+  let text = `${c.date} 기준 보유 ${sharesFmt(h.sharesBefore)}, 평균 단가 ${usd(h.avgCost, 4)}, 주당 원금 ${krw(h.principalPerShareKRW)}.`;
+  if (c.shares > 0 && c.price > 0) {
+    text += ` 수수료 뺀 판 돈 ${usd(h.netUSD)}, 실현 손익 ${signed(h.realizedUSD, (v) => usd(v))}`;
+    const fx = h.fxRate ?? (state.market.fxRate > 0 ? state.market.fxRate : null);
+    if (fx) text += ` (원화 ${signed(h.netUSD * fx - h.principalRemovedKRW, krw)}${h.fxRate ? '' : ', 현재 환율'})`;
+    text += '.';
+  }
+  hint.textContent = text;
+}
+Object.values(sf).forEach((f) => f.addEventListener('input', () => safe('매도 미리보기', updateSellHint)));
+
+sellForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const c = readSellForm();
+  let err = !c.date ? '날짜를 입력해 주세요.'
+    : !(c.shares > 0) ? '판 주수를 입력해 주세요.'
+    : !(c.price > 0) ? '매도 가격을 입력해 주세요.'
+    : !(c.feeUSD >= 0) ? '수수료는 0 이상이어야 해요. (없으면 비우기)'
+    : c.fxRate !== '' && !(c.fxRate > 0) ? '환율은 0보다 커야 해요. 원화로 안 바꿨으면 비워 두세요.'
+    : '';
+  if (!err) {
+    const { r, h } = previewSell(c);
+    if (h.oversold) err = `${c.date}에는 ${sharesFmt(h.sharesBefore)}만 갖고 있어서 ${sharesFmt(c.shares)}를 팔 수 없어요.`;
+    else if (r.sellHistory.some((x) => x.oversold)) err = '이 기록을 넣으면 뒤에 있는 매도 기록이 그날 보유 주수보다 많아져요. 날짜나 주수를 확인해 주세요.';
+  }
+  if (err) { $('sf-error').textContent = err; return; }
+
+  if (editingSellId) {
+    const i = state.sells.findIndex((s) => s.id === editingSellId);
+    state.sells[i] = { ...state.sells[i], ...c };
+  } else {
+    state.sells.push({ id: `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, ...c });
+  }
+  state.sells.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  update();
+  resetSellForm();
+});
+$('sf-cancel').addEventListener('click', resetSellForm);
+
+$('sells-body').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const id = btn.dataset.id;
+  const s = state.sells.find((x) => x.id === id);
+  if (!s) return;
+  if (btn.dataset.act === 'del') {
+    if (!confirm(`${s.date} 매도 기록(${sharesFmt(s.shares)})을 지울까요?`)) return;
+    state.sells = state.sells.filter((x) => x.id !== id);
+    if (editingSellId === id) resetSellForm();
+    update();
+  } else {
+    editingSellId = id;
+    sf.date.value = s.date;
+    sf.shares.value = s.shares;
+    sf.price.value = s.price;
+    sf.fee.value = s.feeUSD || '';
+    sf.fx.value = s.fxRate === '' ? '' : s.fxRate;
+    $('sell-form-title').textContent = `${s.date} 매도 기록 수정`;
+    $('sf-submit').textContent = '수정 저장';
+    $('sf-cancel').hidden = false;
+    $('sf-error').textContent = '';
+    updateSellHint();
+    sellForm.scrollIntoView({ behavior: 'smooth' });
+  }
+});
+
 // ---------- 백업 ----------
 $('btn-export').addEventListener('click', () => {
   exportState(state);
@@ -262,7 +367,7 @@ $('file-import').addEventListener('change', async (e) => {
   if (!file) return;
   try {
     const next = await importStateFile(file);
-    if (!confirm(`기록 ${next.records.length}개가 들어 있는 백업이에요. 지금 데이터를 이 파일로 바꿀까요?`)) return;
+    if (!confirm(`분배 기록 ${next.records.length}개, 매도 기록 ${next.sells.length}개가 들어 있는 백업이에요. 지금 데이터를 이 파일로 바꿀까요?`)) return;
     state = next;
     reloadInputs();
     $('backup-msg').textContent = '백업 파일을 불러왔어요.';
@@ -289,6 +394,7 @@ function reloadInputs() {
   $('sim-fractional').checked = state.sim.fractional;
   buildScenarioInputs();
   resetForm();
+  resetSellForm();
   update();
 }
 
@@ -297,11 +403,12 @@ function render() {
   safe('성적표', renderReport);
   safe('달러 기준·환율 효과', renderFx);
   safe('분배 기록', renderRecords);
+  safe('매도 기록', renderSells);
   if (!$('tab-sim').hidden) safe('시뮬레이션', renderSim);
 }
 
 function renderReport() {
-  const r = computeReport(state.settings, state.records, state.market);
+  const r = computeReport(state.settings, state.records, state.market, state.sells);
   const hasMarket = r.price > 0 && r.fxRate > 0;
   $('setup-hint').hidden = r.initialShares > 0 || state.records.length > 0;
 
@@ -348,17 +455,49 @@ function renderReport() {
   tone($('r-broker-profit'), hasMarket ? r.brokerProfitKRW : 0);
   tone($('r-return-again'), hasMarket ? r.profitKRW : 0);
   $('r-broker-cost').textContent = krw(r.brokerCostKRW);
+  safe('남은 주식·전체 기준', () => renderSellSummary(r, hasMarket));
   $('verdict').className = `verdict ${r.sharesUp ? 's-up' : 's-flat'} ${r.moneyUp ? 'm-up' : 'm-down'}`;
+}
+
+/** 성적표의 "남은 주식 기준과 전체 기준" 카드와 핵심 지표의 판 돈 표시 */
+function renderSellSummary(r, hasMarket) {
+  // 판 적이 있으면 총수익률은 판 돈까지 합친 "전체 기준"이고, 그 아래에 남은 주식 기준을 따로 보여 줌
+  $('hero-basis').textContent = r.hasSells ? '분배금·판 돈 포함' : '분배금 포함';
+  $('hero-remaining-line').hidden = !r.hasSells;
+  const rate = (v) => (v == null ? '원금 필요' : pct(v));
+  const set = (id, text, toneValue) => { $(id).textContent = text; tone($(id), hasMarket ? toneValue : 0); };
+
+  $('r-sold-shares').textContent = sharesFmt(r.soldShares);
+  $('r-remaining-principal').textContent = krw(r.remainingPrincipalKRW);
+  $('sell-note').textContent = r.hasSells
+    ? '남은 주식 기준은 남은 주식과 남은 원금만 비교하고, 전체 기준은 판 돈까지 합쳐 처음 넣은 원금과 비교해요. 실현 손익(원화)은 판 주식의 원금 몫과 비교하고, 원화로 바꾸지 않은 판 돈은 현재 환율로 계산해요.'
+    : '아직 매도 기록이 없어서 두 기준이 같아요. 매도는 "분배 기록" 탭에서 적을 수 있어요.';
+  set('r-realized-usd', signed(r.realizedUSD, (v) => usd(v)), r.realizedUSD);
+  if (!hasMarket) {
+    for (const id of ['r-remaining-return', 'r-overall-return', 'hero-remaining', 'r-realized-krw']) set(id, '–', 0);
+    $('r-remaining-profit').textContent = '현재 주가와 환율을 입력하세요';
+    $('r-overall-profit').textContent = '';
+    $('r-sold-proceeds').textContent = r.hasSells ? `${usd(r.soldProceedsUSD)} (원화는 현재 환율 필요)` : krw(0);
+    return;
+  }
+  set('r-remaining-return', rate(r.remainingReturn), r.remainingProfitKRW);
+  set('r-remaining-profit', `손익 ${signed(r.remainingProfitKRW, krw)}`, r.remainingProfitKRW);
+  set('r-overall-return', rate(r.overallReturn), r.profitKRW);
+  set('r-overall-profit', r.principalKRW > 0 ? `손익 ${signed(r.profitKRW, krw)}` : '', r.profitKRW);
+  set('hero-remaining', rate(r.remainingReturn), r.remainingProfitKRW);
+  $('r-sold-proceeds').textContent = `${krw(r.soldProceedsKRW)} (${usd(r.soldProceedsUSD)})`;
+  set('r-realized-krw', signed(r.realizedKRW, krw), r.realizedKRW);
 }
 
 /** 달러 기준 수익률과 환율 효과 카드, 설정 화면의 평균 환전 환율 */
 function renderFx() {
-  const b = computeFxBreakdown(state.settings, state.records, state.market);
+  const b = computeFxBreakdown(state.settings, state.records, state.market, state.sells);
   const fxFmt = (v) => `${v.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}원`;
   $('s-avgfx').textContent = b.ready
     ? `평균 환전 환율: ${fxFmt(b.avgFxRate)} (원금 ${krw(state.settings.principalKRW)} ÷ ${usd(b.initialUSD)})`
     : state.settings.principalKRW > 0 ? '넣은 달러를 입력하면 평균 환전 환율을 계산해 드려요.' : '';
 
+  $('fx-basis').textContent = b.hasSells ? '남은 주식 기준' : '';
   $('fx-empty').hidden = b.ready;
   $('fx-body').hidden = !b.ready;
   if (!b.ready) return;
@@ -383,7 +522,7 @@ function renderFx() {
 }
 
 function renderRecords() {
-  const p = computePortfolio(state.settings, state.records);
+  const p = computePortfolio(state.settings, state.records, state.sells);
   const byId = new Map(p.history.map((h) => [h.id, h]));
   const has = state.records.length > 0;
   $('records-empty').hidden = has;
@@ -402,8 +541,35 @@ function renderRecords() {
   }).join('');
 }
 
+function renderSells() {
+  const r = computeReport(state.settings, state.records, state.market, state.sells);
+  const byId = new Map(r.sellHistory.map((h) => [h.id, h]));
+  const has = state.sells.length > 0;
+  $('sells-empty').hidden = has;
+  $('sells-table').hidden = !has;
+  const fxNow = state.market.fxRate;
+  const toneClass = (v) => (v > 0 ? 'up' : v < 0 ? 'down' : '');
+  // 최신 기록이 위에 오도록 (날짜순으로 정렬해 둔 목록을 뒤집음)
+  $('sells-body').innerHTML = [...state.sells].reverse().map((s) => {
+    const h = byId.get(s.id);
+    // 원화 실현 손익: 원화로 바꿨으면 그때 환율, 아니면 현재 환율로
+    const krwRealized = h.realizedKRW ?? (fxNow > 0 ? h.netUSD * fxNow - h.principalRemovedKRW : null);
+    const krwLabel = krwRealized == null ? '' : `<small>${signed(krwRealized, krw)}${h.fxRate ? '' : ' (현재 환율)'}</small>`;
+    const fxNote = s.fxRate ? `<br><small class="muted">${s.fxRate.toLocaleString('ko-KR')}원에 환전</small>` : '';
+    const warn = h.oversold ? `<br><span class="warn-text">⚠ 그날 보유 ${sharesFmt(h.sharesBefore)}보다 많아요</span>` : '';
+    return `<tr>
+      <td>${escapeHTML(s.date)}</td>
+      <td data-label="매도">${sharesFmt(s.shares)} × ${usd(s.price)}${fxNote}${warn}</td>
+      <td data-label="수수료">${usd(s.feeUSD)}</td>
+      <td data-label="실현 손익"><span class="realized"><span class="${toneClass(h.realizedUSD)}">${signed(h.realizedUSD, (v) => usd(v))}</span>${krwLabel}</span></td>
+      <td data-label="남은 주수">${sharesFmt(h.sharesAfter)}</td>
+      <td class="actions"><button type="button" data-act="edit" data-id="${escapeHTML(s.id)}">수정</button><button type="button" class="danger" data-act="del" data-id="${escapeHTML(s.id)}">삭제</button></td>
+    </tr>`;
+  }).join('');
+}
+
 function renderSim() {
-  const p = computePortfolio(state.settings, state.records);
+  const p = computePortfolio(state.settings, state.records, state.sells);
   const start = { shares: p.shares, cashUSD: p.cashUSD, price: state.market.price, fxRate: state.market.fxRate };
   const ready = start.shares > 0 && start.price > 0 && start.fxRate > 0;
   $('sim-empty').hidden = ready;
@@ -647,6 +813,7 @@ $('api-key-clear').addEventListener('click', () => {
 safe('시나리오 입력', buildScenarioInputs);
 safe('API 설정', renderApiForm);
 safe('기록 입력칸', resetForm);
+safe('매도 입력칸', resetSellForm);
 render();
 safe('시세 출처', renderQuoteLabels);
 safe('참고 시세', renderReference);
