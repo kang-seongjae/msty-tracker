@@ -1,9 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#101014"/>
-  <!-- 마스크(원·둥근 사각형)로 잘려도 보이도록 가운데 80% 안에만 그림 -->
-  <g transform="translate(256 268) scale(0.78) translate(-256 -268)">
-    <rect x="124" y="292" width="68" height="112" rx="18" fill="#4a4a56"/>
-    <rect x="222" y="220" width="68" height="184" rx="18" fill="#3182f6"/>
-    <rect x="320" y="132" width="68" height="272" rx="18" fill="#f04452"/>
-  </g>
+  <!-- 마스크(원·둥근 사각형)로 잘려도 보이도록 가운데 안전 영역 안에만 그림 (icon.svg 와 같은 그림) -->
+  <defs>
+    <linearGradient id="cover" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d4c3e"/>
+      <stop offset="1" stop-color="#123529"/>
+    </linearGradient>
+    <g id="mark">
+      <!-- 통장 쪽 -->
+      <rect x="92" y="86" width="276" height="304" rx="22" fill="#fcf9ef"/>
+      <path d="M92 108a22 22 0 0 1 22-22h232a22 22 0 0 1 22 22v34H92z" fill="#cfe0d4"/>
+      <path d="M126 196H334M126 252H334M126 308H230" stroke="#6d8f81" stroke-width="16" stroke-linecap="round"/>
+      <!-- 도장: 종이색 바탕 + 겹테두리 + "재" -->
+      <g transform="rotate(-10 342 346)">
+        <circle cx="342" cy="346" r="104" fill="#fcf9ef"/>
+        <circle cx="342" cy="346" r="92" fill="none" stroke="#b5301b" stroke-width="18"/>
+        <circle cx="342" cy="346" r="68" fill="none" stroke="#b5301b" stroke-width="6"/>
+        <g transform="translate(342 346)" fill="none" stroke="#b5301b" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M-44 -30H-6"/>
+          <path d="M-24 -28L-46 32"/>
+          <path d="M-25 -2L-4 30"/>
+          <path d="M14 -42V42M14 0H26"/>
+          <path d="M40 -46V46"/>
+        </g>
+      </g>
+    </g>
+  </defs>
+  <rect width="512" height="512" fill="url(#cover)"/>
+  <g transform="translate(256 256) scale(0.72) translate(-238 -260)"><use href="#mark"/></g>
 </svg>
