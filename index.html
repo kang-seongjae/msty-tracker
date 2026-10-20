@@ -294,6 +294,11 @@
             <tbody id="records-body"></tbody>
           </table>
         </div>
+        <nav class="passbook-pager" id="ledger-pager" aria-label="통장 장 넘기기" hidden>
+          <button type="button" id="ledger-prev" aria-controls="records-table">◀ 앞 장</button>
+          <span class="pager-page num" id="ledger-page" aria-live="polite"></span>
+          <button type="button" id="ledger-next" aria-controls="records-table">다음 장 ▶</button>
+        </nav>
         <p class="help">분배금은 입금, 매도는 출금 칸에 찍히고, 잔고는 그 줄까지 반영한 보유 주수예요. 분배금으로 다시 산 주식은 도장으로 표시해요. 같은 날에 분배와 매도가 있으면 분배를 먼저 적어요.</p>
       </div>
 
@@ -328,7 +333,7 @@
           <label>판 주수<input type="number" inputmode="decimal" step="any" min="0" id="sf-shares" required></label>
           <label>매도 가격 ($)<input type="number" inputmode="decimal" step="any" min="0" id="sf-price" required></label>
           <label>수수료 ($)<input type="number" inputmode="decimal" step="any" min="0" id="sf-fee" placeholder="0"></label>
-          <label>원화로 바꾼 환율 (원/$)<input type="number" inputmode="decimal" step="any" min="0" id="sf-fx" placeholder="안 바꿨으면 비움"></label>
+          <label>원화로 바꾼 환율 (원/$)<input type="number" inputmode="decimal" step="any" min="0" id="sf-fx" placeholder="비워도 됨"></label>
         </div>
         <p class="help" id="sf-hint"></p>
         <p class="error" id="sf-error" role="alert"></p>

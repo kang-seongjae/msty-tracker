@@ -217,8 +217,11 @@ form.addEventListener('submit', (e) => {
   if (editingId) {
     const i = state.records.findIndex((r) => r.id === editingId);
     state.records[i] = { ...state.records[i], ...rec };
+    ledgerFocus = { kind: 'div', id: state.records[i].id };
   } else {
-    state.records.push({ id: `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, ...rec });
+    const newId = `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    state.records.push({ id: newId, ...rec });
+    ledgerFocus = { kind: 'div', id: newId };
   }
   state.records.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   update();
@@ -324,8 +327,11 @@ sellForm.addEventListener('submit', (e) => {
   if (editingSellId) {
     const i = state.sells.findIndex((s) => s.id === editingSellId);
     state.sells[i] = { ...state.sells[i], ...c };
+    ledgerFocus = { kind: 'sell', id: state.sells[i].id };
   } else {
-    state.sells.push({ id: `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, ...c });
+    const newId = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    state.sells.push({ id: newId, ...c });
+    ledgerFocus = { kind: 'sell', id: newId };
   }
   state.sells.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   update();
@@ -400,6 +406,7 @@ function reloadInputs() {
   setVal('sim-target', state.sim.targetKRW);
   $('sim-fractional').checked = state.sim.fractional;
   buildScenarioInputs();
+  ledgerPage = null;
   resetForm();
   resetSellForm();
   update();
@@ -582,6 +589,23 @@ function renderFx() {
   set('fx-part-total', signed(b.display.totalKRW, krw), b.display.totalKRW);
 }
 
+// ---------- 통장 장 넘기기 ----------
+// 진짜 통장처럼 한 장에 LEDGER_ROWS 줄(맨 앞 "신규" 줄 포함)만 보여 주고 "앞 장 / 다음 장"으로 넘깁니다.
+const LEDGER_ROWS = 8;
+let ledgerPage = null; // null 이면 마지막 장(최신 기록)
+let ledgerFocus = null; // 방금 추가·정정한 줄 { kind, id } → 그 줄이 있는 장을 보여 줌
+
+function flipLedger(delta) {
+  if (ledgerPage == null) return;
+  ledgerPage += delta;
+  safe('분배 기록', renderRecords);
+  // 장을 넘기면 통장 첫 줄이 보이게
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  $('records-table').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+}
+$('ledger-prev').addEventListener('click', () => flipLedger(-1));
+$('ledger-next').addEventListener('click', () => flipLedger(1));
+
 /**
  * 분배 기록 탭의 통장: 분배금(입금)과 매도(출금)를 계산에 적용된 순서 그대로(날짜순, 같은 날은 분배 먼저)
  * 한 줄씩 찍습니다. 잔고는 그 줄을 적용한 직후의 보유 주수(computePortfolio 의 history / sellHistory)입니다.
@@ -613,6 +637,7 @@ function renderRecords() {
   const no = (n) => String(n).padStart(2, '0');
 
   // 첫 줄: 통장을 연 날의 잔고(처음 보유 주수)
+  const keys = [null]; // rows 와 같은 순서로 각 줄이 어떤 기록인지 (장 찾기용)
   const rows = [`<tr class="line-open">
       <td class="c-no">${no(0)}</td>
       <td class="c-date">신규</td>
@@ -625,6 +650,7 @@ function renderRecords() {
 
   lines.forEach((line, k) => {
     const h = line.h;
+    keys.push(`${line.kind}:${h.id}`);
     if (line.kind === 'div') {
       const r = recById.get(h.id);
       const stamp = r.sharesBought > 0
@@ -655,8 +681,30 @@ function renderRecords() {
     </tr>`);
     }
   });
-  rows.push('<tr class="line-end"><td colspan="7">*** 이하 여백 ***</td></tr>');
-  $('records-body').innerHTML = rows.join('');
+  // 한 장씩: 처음엔 마지막 장, 방금 추가·정정한 기록이 있으면 그 장
+  const pageCount = Math.max(1, Math.ceil(rows.length / LEDGER_ROWS));
+  if (ledgerFocus) {
+    const at = keys.indexOf(`${ledgerFocus.kind}:${ledgerFocus.id}`);
+    if (at >= 0) ledgerPage = Math.floor(at / LEDGER_ROWS);
+    ledgerFocus = null;
+  }
+  if (ledgerPage == null || ledgerPage > pageCount - 1) ledgerPage = pageCount - 1;
+  if (ledgerPage < 0) ledgerPage = 0;
+  const isLast = ledgerPage === pageCount - 1;
+  const pageRows = rows.slice(ledgerPage * LEDGER_ROWS, (ledgerPage + 1) * LEDGER_ROWS);
+  if (isLast) {
+    // 마지막 장: 이하 여백, 남은 줄은 빈 괘선으로 채워 장마다 높이가 같게
+    const blanks = LEDGER_ROWS - pageRows.length;
+    pageRows.push('<tr class="line-end"><td colspan="7">*** 이하 여백 ***</td></tr>');
+    for (let n = 0; n < blanks; n++) pageRows.push('<tr class="line-blank" aria-hidden="true"><td colspan="7"></td></tr>');
+  } else {
+    pageRows.push('<tr class="line-cont"><td colspan="7">다음 장에 계속</td></tr>');
+  }
+  $('records-body').innerHTML = pageRows.join('');
+  $('ledger-pager').hidden = pageCount <= 1;
+  $('ledger-page').textContent = `${ledgerPage + 1} / ${pageCount}장`;
+  $('ledger-prev').disabled = ledgerPage === 0;
+  $('ledger-next').disabled = isLast;
 
   const first = lines[0]?.h.date;
   const last = lines.at(-1)?.h.date;

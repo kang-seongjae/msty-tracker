@@ -432,6 +432,20 @@ table.ledger tbody tr:nth-child(even) td { background-image: linear-gradient(rgb
 .line-div .memo-main::before { content: "△ "; font-size: 0.8em; color: var(--ink-3); }
 .out-qty { display: block; }
 .out-at { display: block; font-size: 0.74rem; font-weight: 400; color: var(--ink-3); }
+/* 통장 장 넘기기 */
+/* 장을 넘겨 통장 첫 줄로 올라갈 때 위에 붙은 머리말에 가리지 않게 */
+#records-table { scroll-margin-top: 110px; }
+.passbook-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 14px 0 2px; }
+.passbook-pager button { min-height: 44px; min-width: 7.5rem; }
+.passbook-pager button:disabled { opacity: 0.45; cursor: default; }
+.pager-page { font-family: var(--print); color: var(--ink-2); min-width: 6.5em; text-align: center; font-weight: 700; }
+.line-cont td {
+  height: auto; padding: 10px 14px 14px; text-align: right !important; border: 0 !important;
+  color: var(--ink-3); font-size: 0.8rem; letter-spacing: 0.12em;
+}
+.line-cont td::after { content: " ▶"; }
+.line-blank td { height: 64px; border-left: 0 !important; }
+
 .line-end td {
   height: auto; padding: 12px 0 30px; text-align: center !important; border: 0 !important;
   color: var(--ink-3); font-size: 0.8rem; letter-spacing: 0.25em;
@@ -586,6 +600,10 @@ table.results tbody th { font-family: var(--title); font-weight: 800; letter-spa
   table.ledger tbody tr:nth-child(even) td { background-image: none; }
   table.ledger tbody tr:nth-child(even) { background: rgb(29 106 81 / 0.03); }
   table.ledger tr.line-end { display: block; }
+  table.ledger tr.line-cont, table.ledger tr.line-blank { display: block; }
+  table.ledger tr.line-cont td, table.ledger tr.line-blank td { display: block; }
+  table.ledger tr.line-blank td { height: 52px; }
+  .passbook-pager button { min-width: 6.5rem; }
   table.ledger tr.line-end td { display: block; }
   .memo-text { margin-right: 0; }
   .stamp { margin: -2px 6px -2px 0; }
