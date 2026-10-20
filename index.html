@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#101014">
-  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#173f33">
+  <meta name="color-scheme" content="light">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="MSTY 기록장">
@@ -17,17 +17,21 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+  <!-- 통장 겉표지: 짙은 초록 표지에 금박 글씨 -->
   <header class="app-header">
     <div class="app-header-inner">
-      <h1>MSTY 기록장</h1>
-      <!-- 폰 너비에서는 화면 아래에 고정되고, PC 너비에서는 제목 옆에 놓입니다. -->
+      <div class="cover-title">
+        <p class="cover-kicker" aria-hidden="true">분배금 재투자 통장</p>
+        <h1>MSTY 기록장</h1>
+      </div>
+      <!-- 통장 옆에 붙은 색인 탭. 폰에서는 화면 아래에 고정되고, PC 에서는 표지 아래쪽에 붙습니다. -->
       <nav class="tabs" role="tablist" aria-label="화면 선택">
         <button role="tab" data-tab="report" aria-selected="true">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11M10 20V5M16 20v-6M21 20H3"/></svg>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
           <span>성적표</span>
         </button>
         <button role="tab" data-tab="records" aria-selected="false">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5C6 4 9 4 12 5.5V20c-3-1.5-6-1.5-9 0zM12 5.5C15 4 18 4 21 5.5V20c-3-1.5-6-1.5-9 0z"/></svg>
           <span>분배 기록</span>
         </button>
         <button role="tab" data-tab="sim" aria-selected="false">
@@ -35,7 +39,7 @@
           <span>시뮬레이션</span>
         </button>
         <button role="tab" data-tab="settings" aria-selected="false">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1.5 14h5M9.5 8h5M17.5 16h5"/></svg>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.5"/><path d="M12 7.5v9M7.5 12h9"/></svg>
           <span>설정</span>
         </button>
       </nav>
@@ -44,33 +48,39 @@
   </header>
 
   <main>
-    <!-- 성적표 -->
-    <section id="tab-report" class="panel" role="tabpanel">
+    <!-- 성적표 = 통장 맨 뒤 잔액 요약 페이지 -->
+    <section id="tab-report" class="panel book" role="tabpanel">
       <!-- 가장 중요한 숫자: 총수익률, 증권사 기준 수익률, 보유 주수 -->
       <section class="card hero span-2" aria-label="핵심 지표">
+        <div class="sheet-head">
+          <h2>잔액 요약</h2>
+          <span class="sheet-note">통장 맨 뒷장</span>
+        </div>
         <div class="hero-main">
           <p class="eyebrow">총수익률 <span class="eyebrow-note" id="hero-basis">분배금 포함</span>
             <span class="stale-badge" id="hero-stale" hidden title="시세를 새로 못 가져와서 예전 주가·환율로 계산했어요">⚠ 예전 시세</span></p>
           <p class="hero-big num" id="r-return">–</p>
           <p class="hero-sub num" id="r-profit"></p>
-          <p class="hero-value">평가금액 <strong class="num" id="hero-value">–</strong></p>
-          <p class="hero-value" id="hero-remaining-line" hidden>남은 주식 기준 <strong class="num" id="hero-remaining">–</strong></p>
+          <p class="hero-value"><span class="lbl">평가금액</span> <strong class="num" id="hero-value">–</strong></p>
+          <p class="hero-value" id="hero-remaining-line" hidden><span class="lbl">남은 주식 기준</span> <strong class="num" id="hero-remaining">–</strong></p>
         </div>
-        <div class="hero-stat">
-          <p class="eyebrow">증권사 기준 수익률</p>
-          <p class="stat-big num" id="r-broker-return">–</p>
-          <p class="hero-sub num" id="r-broker-profit"></p>
-        </div>
-        <div class="hero-stat">
-          <p class="eyebrow">보유 주수</p>
-          <p class="stat-big num" id="r-shares">–</p>
-          <p class="hero-sub num" id="r-shares-sub"></p>
+        <div class="hero-cells">
+          <div class="hero-stat">
+            <p class="eyebrow">증권사 기준 수익률</p>
+            <p class="stat-big num" id="r-broker-return">–</p>
+            <p class="hero-sub num" id="r-broker-profit"></p>
+          </div>
+          <div class="hero-stat">
+            <p class="eyebrow">보유 주수 <span class="eyebrow-note">잔고</span></p>
+            <p class="stat-big num" id="r-shares">–</p>
+            <p class="hero-sub num" id="r-shares-sub"></p>
+          </div>
         </div>
         <p class="verdict" id="verdict"></p>
       </section>
 
       <div id="setup-hint" class="card notice span-2" hidden>
-        먼저 <button type="button" class="link" data-goto="settings">설정</button>에서 처음 보유 주수, 평균 단가, 원금을 입력해 주세요.
+        통장을 아직 만들지 않았어요. 먼저 <button type="button" class="link" data-goto="settings">설정</button>에서 처음 보유 주수, 평균 단가, 원금을 입력해 주세요.
       </div>
 
       <div class="card">
@@ -251,13 +261,53 @@
         </dl>
         <p class="help">분배금은 모두 주식으로 다시 샀기 때문에 평가금액 안에 이미 들어 있어요. 총수익률은 분배금을 따로 한 번 더 더하지 않고, (평가금액 − 원금) ÷ 원금으로 계산해요.</p>
       </div>
+      <p class="book-end span-2" aria-hidden="true">— 잔액 요약 끝 —</p>
     </section>
 
-    <!-- 분배 기록 -->
+    <!-- 분배 기록 = 펼친 통장. 분배금(입금)과 매도(출금)가 날짜순으로 한 줄씩 찍힘 -->
     <section id="tab-records" class="panel" role="tabpanel" hidden>
-      <form class="card" id="record-form" novalidate>
-        <h2 id="record-form-title">분배 기록 추가</h2>
-        <div class="grid2">
+      <div class="card span-2 passbook">
+        <div class="passbook-head">
+          <div>
+            <h2>통장 거래내역</h2>
+            <p class="passbook-range num" id="ledger-range"></p>
+          </div>
+          <div class="passbook-jump">
+            <a class="button slip-link in" href="#record-form">입금 전표 쓰기</a>
+            <a class="button slip-link out" href="#sell-form">출금 전표 쓰기</a>
+          </div>
+        </div>
+        <p class="help empty-line" id="records-empty">아직 찍힌 줄이 없어요. 아래 입금 전표에 첫 분배금을 적으면 여기에 한 줄씩 찍혀요.</p>
+        <div class="table-wrap ledger-wrap">
+          <table class="records ledger" id="records-table" hidden>
+            <thead>
+              <tr>
+                <th class="c-no" scope="col">번호</th>
+                <th class="c-date" scope="col">거래일</th>
+                <th class="c-memo" scope="col">적요</th>
+                <th class="c-in" scope="col">입금<small>세후 분배금</small></th>
+                <th class="c-out" scope="col">출금<small>매도</small></th>
+                <th class="c-bal" scope="col">잔고<small>보유 주수</small></th>
+                <th class="c-act" scope="col"><span class="sr-only">정정·삭제</span></th>
+              </tr>
+            </thead>
+            <tbody id="records-body"></tbody>
+          </table>
+        </div>
+        <nav class="passbook-pager" id="ledger-pager" aria-label="통장 장 넘기기" hidden>
+          <button type="button" id="ledger-prev" aria-controls="records-table">◀ 앞 장</button>
+          <span class="pager-page num" id="ledger-page" aria-live="polite"></span>
+          <button type="button" id="ledger-next" aria-controls="records-table">다음 장 ▶</button>
+        </nav>
+        <p class="help">분배금은 입금, 매도는 출금 칸에 찍히고, 잔고는 그 줄까지 반영한 보유 주수예요. 분배금으로 다시 산 주식은 도장으로 표시해요. 같은 날에 분배와 매도가 있으면 분배를 먼저 적어요.</p>
+      </div>
+
+      <form class="card slip slip-in" id="record-form" novalidate>
+        <div class="slip-head">
+          <span class="slip-kind">입금 전표</span>
+          <h2 id="record-form-title">분배 기록 추가</h2>
+        </div>
+        <div class="grid2 slip-grid">
           <label>날짜<input type="date" id="f-date" required></label>
           <label>세후 분배금 ($)<input type="number" inputmode="decimal" step="any" min="0" id="f-div" required></label>
           <label>매수 가격 ($)<input type="number" inputmode="decimal" step="any" min="0" id="f-price" required></label>
@@ -273,29 +323,17 @@
         </div>
       </form>
 
-      <div class="card">
-        <h2>기록 목록</h2>
-        <p class="help" id="records-empty">아직 기록이 없어요.</p>
-        <div class="table-wrap">
-          <table class="records" id="records-table" hidden>
-            <thead>
-              <tr>
-                <th>날짜</th><th>분배금</th><th>매수</th><th>보유 주수</th><th>평균 단가</th><th></th>
-              </tr>
-            </thead>
-            <tbody id="records-body"></tbody>
-          </table>
+      <form class="card slip slip-out" id="sell-form" novalidate>
+        <div class="slip-head">
+          <span class="slip-kind">출금 전표</span>
+          <h2 id="sell-form-title">매도 기록 추가</h2>
         </div>
-      </div>
-
-      <form class="card" id="sell-form" novalidate>
-        <h2 id="sell-form-title">매도 기록 추가</h2>
-        <div class="grid2">
+        <div class="grid2 slip-grid">
           <label>날짜<input type="date" id="sf-date" required></label>
           <label>판 주수<input type="number" inputmode="decimal" step="any" min="0" id="sf-shares" required></label>
           <label>매도 가격 ($)<input type="number" inputmode="decimal" step="any" min="0" id="sf-price" required></label>
           <label>수수료 ($)<input type="number" inputmode="decimal" step="any" min="0" id="sf-fee" placeholder="0"></label>
-          <label>원화로 바꾼 환율 (원/$)<input type="number" inputmode="decimal" step="any" min="0" id="sf-fx" placeholder="안 바꿨으면 비움"></label>
+          <label>원화로 바꾼 환율 (원/$)<input type="number" inputmode="decimal" step="any" min="0" id="sf-fx" placeholder="비워도 됨"></label>
         </div>
         <p class="help" id="sf-hint"></p>
         <p class="error" id="sf-error" role="alert"></p>
@@ -305,23 +343,24 @@
         </div>
       </form>
 
-      <div class="card">
-        <h2>매도 목록</h2>
-        <p class="help" id="sells-empty">아직 매도 기록이 없어요.</p>
+      <div class="card span-2">
+        <h2>매도 정산 명세</h2>
+        <p class="help" id="sells-empty">아직 매도 기록이 없어요. 출금 전표에 적으면 판 돈과 실현 손익이 여기에 정리돼요.</p>
         <div class="table-wrap">
-          <table class="records" id="sells-table" hidden>
+          <table class="records statement" id="sells-table" hidden>
             <thead>
               <tr>
-                <th>날짜</th><th>매도</th><th>수수료</th><th>실현 손익</th><th>남은 주수</th><th></th>
+                <th scope="col">날짜</th><th scope="col">매도</th><th scope="col">수수료</th><th scope="col">실현 손익</th><th scope="col">남은 주수</th>
               </tr>
             </thead>
             <tbody id="sells-body"></tbody>
           </table>
         </div>
+        <p class="help">정정과 삭제는 위 통장 거래내역의 출금 줄에서 할 수 있어요.</p>
       </div>
     </section>
 
-    <!-- 시뮬레이션 -->
+    <!-- 시뮬레이션 = 예상 잔고표 -->
     <section id="tab-sim" class="panel" role="tabpanel" hidden>
       <div class="card span-2">
         <h2>시나리오 입력</h2>
@@ -347,21 +386,24 @@
       </div>
 
       <div class="card span-2">
-        <h2>시나리오별 결과</h2>
+        <h2>시나리오별 결과 <small class="title-note">52주 뒤 예상 잔고</small></h2>
         <div class="table-wrap">
           <table class="results">
-            <thead><tr><th>시나리오</th><th>52주 뒤 주수</th><th>52주 뒤 평가금액</th><th>원금 대비</th><th>52주 뒤 분배금 (1회)</th><th>목표 도달</th></tr></thead>
+            <thead><tr><th scope="col">시나리오</th><th scope="col">52주 뒤 주수</th><th scope="col">52주 뒤 평가금액</th><th scope="col">원금 대비</th><th scope="col">52주 뒤 분배금 (1회)</th><th scope="col">목표 도달</th></tr></thead>
             <tbody id="sim-results"></tbody>
           </table>
         </div>
       </div>
     </section>
 
-    <!-- 설정 -->
+    <!-- 설정 = 통장 개설 정보 -->
     <section id="tab-settings" class="panel" role="tabpanel" hidden>
-      <form class="card" id="settings-form">
-        <h2>처음 상태</h2>
-        <div class="grid2">
+      <form class="card slip" id="settings-form">
+        <div class="slip-head">
+          <span class="slip-kind">개설 신청서</span>
+          <h2>처음 상태</h2>
+        </div>
+        <div class="grid2 slip-grid">
           <label>처음 보유 주수<input type="number" inputmode="decimal" step="any" min="0" id="s-shares"></label>
           <label>처음 평균 단가 ($)<input type="number" inputmode="decimal" step="any" min="0" id="s-avg"></label>
           <label>내가 넣은 원금 (원)<input type="number" inputmode="numeric" step="any" min="0" id="s-principal"></label>
@@ -392,7 +434,7 @@
       </form>
 
       <div class="card">
-        <h2>백업</h2>
+        <h2>백업 <small class="title-note">통장 사본</small></h2>
         <p class="help">데이터는 이 브라우저에만 저장돼요. 브라우저 데이터를 지우거나 폰을 바꾸면 사라지니, 가끔 백업 파일을 내려받아 두세요.</p>
         <div class="row">
           <button type="button" class="primary" id="btn-export">백업 파일 내려받기 (JSON)</button>
@@ -402,7 +444,7 @@
       </div>
 
       <div class="card">
-        <h2>초기화</h2>
+        <h2>초기화 <small class="title-note">통장 해지</small></h2>
         <p class="help">모든 기록과 설정을 지워요. 되돌릴 수 없으니 먼저 백업하세요.</p>
         <div class="row">
           <button type="button" class="danger" id="btn-reset">모든 데이터 지우기</button>
